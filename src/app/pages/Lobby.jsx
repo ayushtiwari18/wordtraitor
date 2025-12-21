@@ -1,12 +1,20 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
 import { Copy, Check, Users, Settings } from 'lucide-react'
 
 const Lobby = () => {
-  const { roomId } = useParams()
+  const params = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
+  
+  // Debug logging
+  console.log('🔍 DEBUG - Full params object:', params)
+  console.log('🔍 DEBUG - Location pathname:', location.pathname)
+  console.log('🔍 DEBUG - roomId from params:', params.roomId)
+  
+  const { roomId } = params
   
   const { 
     room, 
@@ -27,12 +35,37 @@ const Lobby = () => {
 
   // Load room data once on mount
   useEffect(() => {
-    console.log('🏠 Lobby mounted with roomId:', roomId)
+    console.log('🏠 Lobby mounted')
+    console.log('📦 Params:', params)
+    console.log('🆔 roomId:', roomId)
+    console.log('🌍 pathname:', location.pathname)
     
     // Safety check
     if (!roomId) {
-      console.error('❌ No roomId provided! Redirecting to home...')
-      navigate('/')
+      console.error('❌ No roomId provided!')
+      console.error('📍 Current URL:', window.location.href)
+      console.error('📍 Pathname:', location.pathname)
+      console.error('📦 Params object:', JSON.stringify(params))
+      
+      // Try to extract roomId from pathname as fallback
+      const pathParts = location.pathname.split('/')
+      console.log('🔍 Path parts:', pathParts)
+      const extractedRoomId = pathParts[2] // /lobby/ROOM_ID
+      
+      if (extractedRoomId && extractedRoomId !== 'undefined') {
+        console.log('✅ Extracted roomId from path:', extractedRoomId)
+        // Manually load with extracted ID
+        loadRoom(extractedRoomId)
+          .then(() => console.log('✅ Room loaded via extracted ID'))
+          .catch(err => {
+            console.error('❌ Error loading room:', err)
+            navigate('/')
+          })
+        return
+      }
+      
+      console.error('❌ Cannot extract roomId, redirecting to home...')
+      setTimeout(() => navigate('/'), 100)
       return
     }
 
@@ -69,7 +102,7 @@ const Lobby = () => {
   useEffect(() => {
     if (room?.status === 'PLAYING') {
       console.log('🎮 Game started! Navigating to game page...')
-      navigate(`/game/${roomId}`)
+      navigate(`/game/${roomId || room.id}`)
     }
   }, [room?.status])
 
@@ -137,10 +170,16 @@ const Lobby = () => {
   if (!room && !isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-        <div className="text-center">
+        <div className="text-center max-w-2xl p-8">
           <div className="text-6xl mb-4">⚠️</div>
           <p className="text-xl text-yellow-400 mb-4">Room not found</p>
-          <p className="text-gray-400 mb-4">Room ID: {roomId || 'undefined'}</p>
+          <div className="bg-gray-800 rounded-lg p-4 mb-4 text-left">
+            <p className="text-gray-400 text-sm mb-2">Debug Info:</p>
+            <p className="text-white text-sm">URL: {window.location.href}</p>
+            <p className="text-white text-sm">Pathname: {location.pathname}</p>
+            <p className="text-white text-sm">Room ID: {roomId || 'undefined'}</p>
+            <p className="text-white text-sm">Params: {JSON.stringify(params)}</p>
+          </div>
           <button
             onClick={() => navigate('/')}
             className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"
