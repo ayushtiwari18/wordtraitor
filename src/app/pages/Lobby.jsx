@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
-import { Copy, Check, Users, Settings, Bot } from 'lucide-react'
+import { Copy, Check, Users, Settings } from 'lucide-react'
 
 const Lobby = () => {
   const { roomId } = useParams()
@@ -18,32 +18,41 @@ const Lobby = () => {
     leaveRoom,
     isLoading,
     error,
-    isConnected,
-    isTestMode
+    isConnected
   } = useGameStore()
 
   const [copied, setCopied] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
 
+  // Load room data once on mount
   useEffect(() => {
-    if (roomId && !isTestMode) {
-      loadRoom(roomId).catch(err => {
-        console.error('Error loading room:', err)
-        navigate('/')
-      })
+    console.log('🏠 Lobby mounted with roomId:', roomId)
+    
+    if (roomId) {
+      console.log('📡 Loading room data...')
+      loadRoom(roomId)
+        .then(() => {
+          console.log('✅ Room loaded successfully')
+        })
+        .catch(err => {
+          console.error('❌ Error loading room:', err)
+          navigate('/')
+        })
     }
 
     // Cleanup on unmount
     return () => {
+      console.log('👋 Lobby unmounting...')
       if (room?.status === 'LOBBY') {
         leaveRoom()
       }
     }
-  }, [roomId])
+  }, [roomId]) // Only re-run if roomId changes
 
   // Navigate to game when started
   useEffect(() => {
     if (room?.status === 'PLAYING') {
+      console.log('🎮 Game started! Navigating to game page...')
       navigate(`/game/${roomId}`)
     }
   }, [room?.status, roomId])
@@ -57,27 +66,31 @@ const Lobby = () => {
   }
 
   const handleStartGame = async () => {
-    if (!isTestMode && participants.length < 3) {
-      alert('Need at least 3 players to start!')
+    console.log('🚀 Starting game with', participants.length, 'players')
+    
+    if (participants.length < 2) {
+      alert('Need at least 2 players to start!')
       return
     }
 
     setIsStarting(true)
     try {
       await startGame()
-      // Navigation will happen automatically via useEffect above
+      console.log('✅ Game start request sent')
     } catch (error) {
-      console.error('Error starting game:', error)
+      console.error('❌ Error starting game:', error)
       alert('Failed to start game: ' + error.message)
       setIsStarting(false)
     }
   }
 
   const handleLeave = async () => {
+    console.log('👋 Leaving room...')
     await leaveRoom()
     navigate('/')
   }
 
+  // Loading state
   if (isLoading && !room) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -86,6 +99,7 @@ const Lobby = () => {
     )
   }
 
+  // Error state
   if (error && !room) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -106,81 +120,56 @@ const Lobby = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 py-12 px-4">
       <div className="max-w-4xl mx-auto">
-        {/* Test Mode Banner */}
-        {isTestMode && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-6 bg-gradient-to-r from-green-500/30 to-emerald-500/30 border-2 border-green-500 rounded-xl p-4"
-          >
-            <div className="flex items-center justify-center gap-3">
-              <Bot className="w-6 h-6 text-green-400 animate-pulse" />
-              <div className="text-center">
-                <p className="text-green-400 font-bold text-lg">TEST MODE ACTIVE</p>
-                <p className="text-green-300 text-sm">Playing with 4 AI Bots • No database needed</p>
-              </div>
-              <Bot className="w-6 h-6 text-green-400 animate-pulse" />
-            </div>
-          </motion.div>
-        )}
-
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-8"
         >
-          <h1 className="text-4xl font-bold text-white mb-2">
-            {isTestMode ? '🤖 Test Lobby' : '🎮 Game Lobby'}
-          </h1>
-          <p className="text-gray-400">
-            {isTestMode ? 'Practice with AI bots' : 'Waiting for players to join...'}
-          </p>
+          <h1 className="text-4xl font-bold text-white mb-2">🎮 Game Lobby</h1>
+          <p className="text-gray-400">Waiting for players to join...</p>
           
           {/* Connection Status */}
-          {!isTestMode && (
-            <div className="mt-4 flex items-center justify-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${
-                isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'
-              }`} />
-              <span className="text-sm text-gray-400">
-                {isConnected ? 'Connected' : 'Connecting...'}
-              </span>
-            </div>
-          )}
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${
+              isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'
+            }`} />
+            <span className="text-sm text-gray-400">
+              {isConnected ? 'Connected' : 'Connecting...'}
+            </span>
+          </div>
         </motion.div>
 
         {/* Room Code Card */}
-        {!isTestMode && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-gray-800 border-2 border-purple-500 rounded-2xl p-8 mb-8 text-center"
-          >
-            <p className="text-gray-400 mb-3">Share this code with your friends:</p>
-            <div className="flex items-center justify-center gap-4">
-              <div className="text-5xl font-bold text-white tracking-widest">
-                {room?.room_code}
-              </div>
-              <button
-                onClick={handleCopyCode}
-                className="p-3 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
-                title="Copy code"
-              >
-                {copied ? <Check className="w-6 h-6" /> : <Copy className="w-6 h-6" />}
-              </button>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-gray-800 border-2 border-purple-500 rounded-2xl p-8 mb-8 text-center"
+        >
+          <p className="text-gray-400 mb-3">Share this code with your friends:</p>
+          <div className="flex items-center justify-center gap-4">
+            <div className="text-5xl font-bold text-white tracking-widest">
+              {room?.room_code || '------'}
             </div>
-            {copied && (
-              <motion.p
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="text-green-400 text-sm mt-3"
-              >
-                ✓ Copied to clipboard!
-              </motion.p>
-            )}
-          </motion.div>
-        )}
+            <button
+              onClick={handleCopyCode}
+              disabled={!room?.room_code}
+              className="p-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 rounded-lg transition-colors"
+              title="Copy code"
+            >
+              {copied ? <Check className="w-6 h-6" /> : <Copy className="w-6 h-6" />}
+            </button>
+          </div>
+          {copied && (
+            <motion.p
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-green-400 text-sm mt-3"
+            >
+              ✓ Copied to clipboard!
+            </motion.p>
+          )}
+        </motion.div>
 
         {/* Game Settings */}
         <motion.div
@@ -228,78 +217,52 @@ const Lobby = () => {
           
           <div className="space-y-3">
             <AnimatePresence>
-              {participants.map((player, index) => {
-                const isBot = player.username?.startsWith('Bot ')
-                return (
-                  <motion.div
-                    key={player.user_id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    transition={{ delay: index * 0.1 }}
-                    className={`p-4 rounded-lg border-2 flex items-center justify-between ${
-                      player.user_id === myUserId
-                        ? 'bg-purple-500/10 border-purple-500'
-                        : isBot
-                        ? 'bg-green-500/10 border-green-700'
-                        : 'bg-gray-900 border-gray-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${
-                        isBot ? 'bg-green-500/20' : 'bg-purple-500/20'
-                      }`}>
-                        {isBot ? '🤖' : (player.username?.charAt(0).toUpperCase() || '?')}
-                      </div>
-                      <div>
-                        <p className="text-white font-semibold">
-                          {player.username || `Player ${player.user_id.slice(0, 6)}`}
-                        </p>
-                        {player.user_id === room?.host_id && (
-                          <p className="text-yellow-400 text-xs font-semibold">👑 Host</p>
-                        )}
-                        {isBot && (
-                          <p className="text-green-400 text-xs font-semibold">AI Bot</p>
-                        )}
-                      </div>
+              {participants.map((player, index) => (
+                <motion.div
+                  key={player.user_id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ delay: index * 0.1 }}
+                  className={`p-4 rounded-lg border-2 flex items-center justify-between ${
+                    player.user_id === myUserId
+                      ? 'bg-purple-500/10 border-purple-500'
+                      : 'bg-gray-900 border-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center text-lg font-bold">
+                      {player.username?.charAt(0).toUpperCase() || '?'}
                     </div>
-                    {player.user_id === myUserId && (
-                      <div className="text-sm text-purple-400 font-semibold">You</div>
-                    )}
-                  </motion.div>
-                )
-              })}
+                    <div>
+                      <p className="text-white font-semibold">
+                        {player.username || `Player ${player.user_id.slice(0, 6)}`}
+                      </p>
+                      {player.user_id === room?.host_id && (
+                        <p className="text-yellow-400 text-xs font-semibold">👑 Host</p>
+                      )}
+                    </div>
+                  </div>
+                  {player.user_id === myUserId && (
+                    <div className="text-sm text-purple-400 font-semibold">You</div>
+                  )}
+                </motion.div>
+              ))}
             </AnimatePresence>
           </div>
 
           {/* Waiting for Players */}
-          {!isTestMode && participants.length < 3 && (
+          {participants.length < 2 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500 rounded-lg text-center"
             >
               <p className="text-yellow-400 font-semibold">
-                ⚠️ Need at least 3 players to start
+                ⚠️ Need at least 2 players to start
               </p>
               <p className="text-gray-400 text-sm mt-1">
-                Waiting for {3 - participants.length} more player(s)...
-              </p>
-            </motion.div>
-          )}
-
-          {/* Test Mode Ready */}
-          {isTestMode && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mt-6 p-4 bg-green-500/10 border border-green-500 rounded-lg text-center"
-            >
-              <p className="text-green-400 font-semibold">
-                ✅ Ready to test! All bots loaded.
-              </p>
-              <p className="text-gray-400 text-sm mt-1">
-                Bots will auto-submit hints and votes
+                Waiting for {2 - participants.length} more player(s)...
               </p>
             </motion.div>
           )}
@@ -315,7 +278,7 @@ const Lobby = () => {
           {isHost ? (
             <button
               onClick={handleStartGame}
-              disabled={(!isTestMode && participants.length < 3) || isStarting}
+              disabled={participants.length < 2 || isStarting}
               className="flex-1 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-xl font-bold text-white text-lg transition-colors shadow-lg"
             >
               {isStarting ? 'Starting...' : '🚀 Start Game'}
@@ -341,11 +304,7 @@ const Lobby = () => {
           transition={{ delay: 0.6 }}
           className="mt-8 text-center text-gray-400 text-sm"
         >
-          {isTestMode ? (
-            <p>🤖 Test mode: Bots will automatically play after you. Check console (F12) for logs!</p>
-          ) : (
-            <p>💡 Share the room code with friends so they can join!</p>
-          )}
+          <p>💡 Share the room code with a friend to test multiplayer!</p>
         </motion.div>
       </div>
     </div>
