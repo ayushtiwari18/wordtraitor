@@ -1,212 +1,338 @@
 import { create } from 'zustand'
-import { gameHelpers, realtimeHelpers } from '../lib/supabase'
+import { supabase, gameHelpers, realtimeHelpers } from '../lib/supabase'
 
-const PHASE_DURATIONS = {
-  WHISPER: 30,    // See secret word
-  HINT_DROP: 60,  // Submit hints
-  DEBATE: 120,    // Discussion
-  VERDICT: 45,    // Vote
-  REVEAL: 15      // Results
+// Game phases with durations (in seconds)
+export const GAME_PHASES = {
+  WHISPER: { name: 'WHISPER', duration: 30, next: 'HINT_DROP' },
+  HINT_DROP: { name: 'HINT_DROP', duration: 60, next: 'DEBATE' },
+  DEBATE: { name: 'DEBATE', duration: 120, next: 'VERDICT' },
+  VERDICT: { name: 'VERDICT', duration: 45, next: 'REVEAL' },
+  REVEAL: { name: 'REVEAL', duration: 15, next: null }
 }
 
-export const useGameStore = create((set, get) => ({
-  // Room data
+const useGameStore = create((set, get) => ({
+  // Room state
   room: null,
   roomId: null,
   participants: [],
-  
-  // Player data
   myUserId: null,
   myUsername: null,
-  mySecret: null,
-  
+  isHost: false,
+
   // Game state
-  phase: 'WHISPER',
-  phaseTimeLeft: PHASE_DURATIONS.WHISPER,
+  gamePhase: null,
+  phaseTimer: 0,
+  phaseInterval: null,
+  mySecret: null, // { role, secret_word }
   hints: [],
   votes: [],
+  eliminated: [],
   
   // Real-time
   realtimeChannel: null,
+  isConnected: false,
   
   // UI state
   isLoading: false,
   error: null,
+  showResults: false,
+  gameResults: null,
+
+  // ==========================================
+  // INITIALIZATION
+  // ==========================================
   
-  // Actions
-  setRoom: (room) => set({ room, roomId: room?.id }),
-  
-  setMyInfo: (userId, username) => set({ myUserId: userId, myUsername: username }),
-  
-  setParticipants: (participants) => set({ participants }),
-  
-  setMySecret: (secret) => set({ mySecret: secret }),
-  
-  setPhase: (phase) => set({ 
-    phase, 
-    phaseTimeLeft: PHASE_DURATIONS[phase] || 0 
-  }),
-  
-  decrementTimer: () => {
-    const { phaseTimeLeft, phase } = get()
-    if (phaseTimeLeft > 0) {
-      set({ phaseTimeLeft: phaseTimeLeft - 1 })
-    } else {
-      // Auto-advance to next phase
-      get().advancePhase()
-    }
-  },
-  
-  advancePhase: async () => {
-    const { phase, room, myUserId } = get()
+  initializeGuest: () => {
+    const guestId = localStorage.getItem('guestId') || `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const guestUsername = localStorage.getItem('guestUsername') || `Player${Math.floor(Math.random() * 9999)}`
     
-    const phaseOrder = ['WHISPER', 'HINT_DROP', 'DEBATE', 'VERDICT', 'REVEAL']
-    const currentIndex = phaseOrder.indexOf(phase)
+    localStorage.setItem('guestId', guestId)
+    localStorage.setItem('guestUsername', guestUsername)
     
-    if (currentIndex < phaseOrder.length - 1) {
-      const nextPhase = phaseOrder[currentIndex + 1]
-      set({ phase: nextPhase, phaseTimeLeft: PHASE_DURATIONS[nextPhase] })
-    } else {
-      // After REVEAL, check game end
-      await get().checkAndEndGame()
-    }
+    set({ myUserId: guestId, myUsername: guestUsername })
+    return { guestId, guestUsername }
   },
+
+  // ==========================================
+  // ROOM MANAGEMENT
+  // ==========================================
   
-  addHint: (hint) => set((state) => ({ 
-    hints: [...state.hints, hint] 
-  })),
-  
-  setHints: (hints) => set({ hints }),
-  
-  addVote: (vote) => set((state) => ({ 
-    votes: [...state.votes, vote] 
-  })),
-  
-  setVotes: (votes) => set({ votes }),
-  
-  // Initialize game
-  initializeGame: async (roomId, userId, username) => {
+  createRoom: async (gameMode, difficulty, wordPack) => {
     set({ isLoading: true, error: null })
     
     try {
-      // Set player info
-      set({ myUserId: userId, myUsername: username, roomId })
+      const { guestId, guestUsername } = get().initializeGuest()
       
-      // Fetch room data
-      const room = await gameHelpers.getRoom(roomId)
-      set({ room })
+      const room = await gameHelpers.createRoom(guestId, guestUsername, gameMode, difficulty, wordPack)
       
-      // Fetch participants
-      const participants = await gameHelpers.getParticipants(roomId)
-      set({ participants })
+      set({ 
+        room, 
+        roomId: room.id,
+        isHost: true,
+        isLoading: false
+      })
       
-      // Fetch my secret
-      const secret = await gameHelpers.getMySecret(roomId, userId)
-      set({ mySecret: secret })
+      // Start real-time subscription
+      get().subscribeToRoom(room.id)
       
-      // Start with WHISPER phase
-      set({ phase: 'WHISPER', phaseTimeLeft: PHASE_DURATIONS.WHISPER })
-      
-      // Setup real-time subscriptions
-      get().setupRealtime(roomId)
-      
-      set({ isLoading: false })
+      return room
     } catch (error) {
-      console.error('Failed to initialize game:', error)
       set({ error: error.message, isLoading: false })
+      throw error
     }
   },
-  
-  // Setup real-time subscriptions
-  setupRealtime: (roomId) => {
-    const channel = realtimeHelpers.subscribeToRoom(roomId, {
-      onRoomUpdate: async (payload) => {
-        console.log('Room update:', payload)
-        const updatedRoom = payload.new
-        set({ room: updatedRoom })
-        
-        // If game finished, don't update phase
-        if (updatedRoom.status === 'FINISHED') {
-          return
-        }
-      },
-      
-      onParticipantUpdate: async (payload) => {
-        console.log('Participant update:', payload)
-        const participants = await gameHelpers.getParticipants(roomId)
-        set({ participants })
-      },
-      
-      onHintSubmitted: async (payload) => {
-        console.log('Hint submitted:', payload)
-        const hints = await gameHelpers.getHints(roomId)
-        set({ hints })
-      },
-      
-      onVoteSubmitted: async (payload) => {
-        console.log('Vote submitted:', payload)
-        const votes = await gameHelpers.getVotes(roomId)
-        set({ votes })
-      }
-    })
+
+  joinRoom: async (roomCode) => {
+    set({ isLoading: true, error: null })
     
-    set({ realtimeChannel: channel })
-  },
-  
-  // Cleanup
-  cleanup: () => {
-    const { realtimeChannel } = get()
-    if (realtimeChannel) {
-      realtimeHelpers.unsubscribe(realtimeChannel)
+    try {
+      const { guestId, guestUsername } = get().initializeGuest()
+      
+      const { room } = await gameHelpers.joinRoom(roomCode, guestId, guestUsername)
+      
+      set({ 
+        room, 
+        roomId: room.id,
+        isHost: false,
+        isLoading: false
+      })
+      
+      // Start real-time subscription
+      get().subscribeToRoom(room.id)
+      
+      return room
+    } catch (error) {
+      set({ error: error.message, isLoading: false })
+      throw error
     }
-    set({
-      room: null,
-      roomId: null,
-      participants: [],
-      myUserId: null,
-      myUsername: null,
-      mySecret: null,
-      phase: 'WHISPER',
-      phaseTimeLeft: PHASE_DURATIONS.WHISPER,
-      hints: [],
-      votes: [],
-      realtimeChannel: null,
-      isLoading: false,
-      error: null
-    })
   },
+
+  loadRoom: async (roomId) => {
+    set({ isLoading: true, error: null })
+    
+    try {
+      const { guestId } = get().initializeGuest()
+      
+      const room = await gameHelpers.getRoom(roomId)
+      const participants = await gameHelpers.getParticipants(roomId)
+      
+      set({ 
+        room, 
+        roomId,
+        participants,
+        isHost: room.host_id === guestId,
+        isLoading: false
+      })
+      
+      // Subscribe to real-time updates
+      get().subscribeToRoom(roomId)
+      
+      return room
+    } catch (error) {
+      set({ error: error.message, isLoading: false })
+      throw error
+    }
+  },
+
+  leaveRoom: async () => {
+    const { roomId, myUserId, realtimeChannel } = get()
+    
+    try {
+      if (roomId && myUserId) {
+        await gameHelpers.leaveRoom(roomId, myUserId)
+      }
+      
+      // Unsubscribe from real-time
+      if (realtimeChannel) {
+        realtimeHelpers.unsubscribe(realtimeChannel)
+      }
+      
+      // Clear phase timer
+      const { phaseInterval } = get()
+      if (phaseInterval) {
+        clearInterval(phaseInterval)
+      }
+      
+      // Reset store
+      set({
+        room: null,
+        roomId: null,
+        participants: [],
+        isHost: false,
+        gamePhase: null,
+        phaseTimer: 0,
+        phaseInterval: null,
+        mySecret: null,
+        hints: [],
+        votes: [],
+        eliminated: [],
+        realtimeChannel: null,
+        isConnected: false,
+        showResults: false,
+        gameResults: null
+      })
+    } catch (error) {
+      console.error('Error leaving room:', error)
+    }
+  },
+
+  // ==========================================
+  // GAME FLOW
+  // ==========================================
   
-  // Submit hint
+  startGame: async () => {
+    set({ isLoading: true, error: null })
+    
+    try {
+      const { roomId, participants } = get()
+      
+      if (participants.length < 3) {
+        throw new Error('Need at least 3 players to start')
+      }
+      
+      // Update room status
+      await gameHelpers.startGame(roomId)
+      
+      // Assign roles and words
+      const { room } = get()
+      await gameHelpers.assignRoles(roomId, participants, room.difficulty, room.word_pack)
+      
+      // Load my secret
+      const { myUserId } = get()
+      const mySecret = await gameHelpers.getMySecret(roomId, myUserId)
+      
+      set({ 
+        mySecret,
+        gamePhase: 'WHISPER',
+        isLoading: false
+      })
+      
+      // Start phase timer
+      get().startPhaseTimer('WHISPER')
+      
+    } catch (error) {
+      set({ error: error.message, isLoading: false })
+      throw error
+    }
+  },
+
+  startPhaseTimer: (phaseName) => {
+    const phase = GAME_PHASES[phaseName]
+    if (!phase) return
+    
+    // Clear existing timer
+    const { phaseInterval } = get()
+    if (phaseInterval) {
+      clearInterval(phaseInterval)
+    }
+    
+    let timeLeft = phase.duration
+    set({ phaseTimer: timeLeft })
+    
+    const interval = setInterval(() => {
+      timeLeft -= 1
+      set({ phaseTimer: timeLeft })
+      
+      if (timeLeft <= 0) {
+        clearInterval(interval)
+        get().advancePhase()
+      }
+    }, 1000)
+    
+    set({ phaseInterval: interval })
+  },
+
+  advancePhase: async () => {
+    const { gamePhase, roomId } = get()
+    const currentPhase = GAME_PHASES[gamePhase]
+    
+    if (!currentPhase?.next) {
+      // Game round complete, check win conditions
+      await get().checkWinConditions()
+      return
+    }
+    
+    set({ gamePhase: currentPhase.next })
+    
+    // Load data for new phase
+    if (currentPhase.next === 'DEBATE') {
+      await get().loadHints()
+    } else if (currentPhase.next === 'REVEAL') {
+      await get().loadVotes()
+    }
+    
+    // Start timer for next phase
+    get().startPhaseTimer(currentPhase.next)
+  },
+
+  skipPhase: async () => {
+    const { phaseInterval } = get()
+    if (phaseInterval) {
+      clearInterval(phaseInterval)
+    }
+    await get().advancePhase()
+  },
+
+  // ==========================================
+  // HINTS
+  // ==========================================
+  
   submitHint: async (hintText) => {
     const { roomId, myUserId } = get()
-    set({ isLoading: true, error: null })
     
     try {
       await gameHelpers.submitHint(roomId, myUserId, hintText)
-      set({ isLoading: false })
+      await get().loadHints()
     } catch (error) {
-      console.error('Failed to submit hint:', error)
-      set({ error: error.message, isLoading: false })
+      set({ error: error.message })
+      throw error
     }
   },
+
+  loadHints: async () => {
+    const { roomId } = get()
+    
+    try {
+      const hints = await gameHelpers.getHints(roomId)
+      set({ hints })
+    } catch (error) {
+      console.error('Error loading hints:', error)
+    }
+  },
+
+  // ==========================================
+  // VOTING
+  // ==========================================
   
-  // Submit vote
   submitVote: async (targetId) => {
     const { roomId, myUserId } = get()
-    set({ isLoading: true, error: null })
     
     try {
       await gameHelpers.submitVote(roomId, myUserId, targetId)
-      set({ isLoading: false })
+      await get().loadVotes()
     } catch (error) {
-      console.error('Failed to submit vote:', error)
-      set({ error: error.message, isLoading: false })
+      set({ error: error.message })
+      throw error
     }
   },
+
+  loadVotes: async () => {
+    const { roomId } = get()
+    
+    try {
+      const votes = await gameHelpers.getVotes(roomId)
+      set({ votes })
+    } catch (error) {
+      console.error('Error loading votes:', error)
+    }
+  },
+
+  // ==========================================
+  // WIN CONDITIONS
+  // ==========================================
   
-  // Check and end game
-  checkAndEndGame: async () => {
-    const { roomId, votes, participants } = get()
+  checkWinConditions: async () => {
+    const { roomId } = get()
     
     try {
       // Calculate vote results
@@ -216,47 +342,136 @@ export const useGameStore = create((set, get) => ({
         // Eliminate player
         await gameHelpers.eliminatePlayer(roomId, eliminatedId)
         
-        // Refresh participants
-        const updatedParticipants = await gameHelpers.getParticipants(roomId)
-        set({ participants: updatedParticipants })
+        // Add to eliminated list
+        const { eliminated } = get()
+        set({ eliminated: [...eliminated, eliminatedId] })
       }
       
       // Check if game should end
-      const endResult = await gameHelpers.checkGameEnd(roomId)
+      const gameEnd = await gameHelpers.checkGameEnd(roomId)
       
-      if (endResult.ended) {
+      if (gameEnd.ended) {
         // End game
-        await gameHelpers.endGame(roomId, endResult.winner, endResult.traitorId)
-      } else {
-        // Continue to next round - reset to WHISPER
+        const results = await gameHelpers.endGame(roomId, gameEnd.winner, gameEnd.traitorId)
+        
         set({ 
-          phase: 'WHISPER', 
-          phaseTimeLeft: PHASE_DURATIONS.WHISPER,
+          showResults: true,
+          gameResults: {
+            ...results,
+            winner: gameEnd.winner,
+            traitorId: gameEnd.traitorId,
+            voteCounts
+          }
+        })
+        
+        // Clear timer
+        const { phaseInterval } = get()
+        if (phaseInterval) {
+          clearInterval(phaseInterval)
+        }
+      } else {
+        // Continue to next round - restart from WHISPER
+        set({ 
+          gamePhase: 'WHISPER',
           hints: [],
           votes: []
         })
+        get().startPhaseTimer('WHISPER')
       }
+      
     } catch (error) {
-      console.error('Failed to check game end:', error)
+      console.error('Error checking win conditions:', error)
       set({ error: error.message })
     }
   },
+
+  // ==========================================
+  // REAL-TIME SUBSCRIPTIONS
+  // ==========================================
   
-  // Get alive participants
+  subscribeToRoom: (roomId) => {
+    const channel = realtimeHelpers.subscribeToRoom(roomId, {
+      onRoomUpdate: (payload) => {
+        const { room } = get()
+        
+        if (payload.eventType === 'UPDATE') {
+          const updatedRoom = payload.new
+          set({ room: updatedRoom })
+          
+          // If game started by host, sync phase
+          if (room?.status === 'LOBBY' && updatedRoom.status === 'PLAYING') {
+            get().syncGameStart()
+          }
+        }
+      },
+      
+      onParticipantUpdate: async (payload) => {
+        const { roomId } = get()
+        const participants = await gameHelpers.getParticipants(roomId)
+        set({ participants })
+      },
+      
+      onHintSubmitted: async (payload) => {
+        await get().loadHints()
+      },
+      
+      onVoteSubmitted: async (payload) => {
+        await get().loadVotes()
+      }
+    })
+    
+    set({ realtimeChannel: channel, isConnected: true })
+  },
+
+  syncGameStart: async () => {
+    const { roomId, myUserId } = get()
+    
+    try {
+      // Load my secret
+      const mySecret = await gameHelpers.getMySecret(roomId, myUserId)
+      
+      set({ 
+        mySecret,
+        gamePhase: 'WHISPER'
+      })
+      
+      // Start phase timer
+      get().startPhaseTimer('WHISPER')
+      
+    } catch (error) {
+      console.error('Error syncing game start:', error)
+    }
+  },
+
+  // ==========================================
+  // HELPERS
+  // ==========================================
+  
+  getMyParticipant: () => {
+    const { participants, myUserId } = get()
+    return participants.find(p => p.user_id === myUserId)
+  },
+
+  isMyTurn: () => {
+    const { gamePhase, myUserId, hints, votes } = get()
+    
+    if (gamePhase === 'HINT_DROP') {
+      return !hints.some(h => h.user_id === myUserId)
+    }
+    
+    if (gamePhase === 'VERDICT') {
+      return !votes.some(v => v.voter_id === myUserId)
+    }
+    
+    return false
+  },
+
   getAliveParticipants: () => {
     const { participants } = get()
     return participants.filter(p => p.is_alive)
   },
-  
-  // Check if I voted
-  hasVoted: () => {
-    const { votes, myUserId } = get()
-    return votes.some(v => v.voter_id === myUserId)
-  },
-  
-  // Check if I submitted hint
-  hasSubmittedHint: () => {
-    const { hints, myUserId } = get()
-    return hints.some(h => h.user_id === myUserId)
-  }
+
+  clearError: () => set({ error: null })
 }))
+
+export default useGameStore
