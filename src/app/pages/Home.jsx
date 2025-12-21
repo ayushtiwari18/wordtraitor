@@ -1,137 +1,388 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Plus, Users, Play } from 'lucide-react'
+import { Play, Users, Settings } from 'lucide-react'
 import { useGuestStore } from '@/store/guestStore'
 import { useUIStore } from '@/store/uiStore'
-import { GAME_MODES, DIFFICULTY_LEVELS, WORD_PACKS } from '@/lib/constants'
-import { getGameModeDisplay, getDifficultyDisplay, getWordPackDisplay, generateRoomCode } from '@/lib/utils'
+import { gameHelpers, isSupabaseConfigured } from '@/lib/supabase'
+import { isValidRoomCode } from '@/lib/utils'
 import PageContainer from '@/components/PageContainer'
-import Button from '@/components/Button'
+import AppHeader from '@/components/AppHeader'
 import Card from '@/components/Card'
+import Button from '@/components/Button'
 import Modal from '@/components/Modal'
-import Input from '@/components/Input'
 import ToastContainer from '@/components/Toast'
 
 const Home = () => {
   const navigate = useNavigate()
-  const { guestId, username, initializeGuest, setUsername } = useGuestStore()
+  const { username, setUsername: saveUsername } = useGuestStore()
   const { showSuccess, showError } = useUIStore()
   
   const [showUsernameModal, setShowUsernameModal] = useState(false)
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showJoinModal, setShowJoinModal] = useState(false)
   const [usernameInput, setUsernameInput] = useState('')
-  const [roomCode, setRoomCode] = useState('')
-  const [settings, setSettings] = useState({
-    gameMode: GAME_MODES.SILENT,
-    difficulty: DIFFICULTY_LEVELS.MEDIUM,
-    wordPack: WORD_PACKS.GENERAL
-  })
+  const [pendingAction, setPendingAction] = useState(null)
+  
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [gameMode, setGameMode] = useState('SILENT')
+  const [difficulty, setDifficulty] = useState('MEDIUM')
+  const [wordPack, setWordPack] = useState('GENERAL')
+  const [creating, setCreating] = useState(false)
+  
+  const [showJoinModal, setShowJoinModal] = useState(false)
+  const [roomCodeInput, setRoomCodeInput] = useState('')
+  const [joining, setJoining] = useState(false)
   
   useEffect(() => {
-    initializeGuest()
-    if (!username) {
-      setShowUsernameModal(true)
+    // Check Supabase configuration on mount
+    if (!isSupabaseConfigured()) {
+      showError('Supabase not configured. Please add your credentials to .env')
     }
   }, [])
   
-  const handleSetUsername = () => {
-    if (!usernameInput || usernameInput.length < 3) {
+  const handleCreateClick = () => {
+    if (!username) {
+      setPendingAction('create')
+      setShowUsernameModal(true)
+    } else {
+      setShowCreateModal(true)
+    }
+  }
+  
+  const handleJoinClick = () => {
+    if (!username) {
+      setPendingAction('join')
+      setShowUsernameModal(true)
+    } else {
+      setShowJoinModal(true)
+    }
+  }
+  
+  const handleUsernameSubmit = async () => {
+    if (usernameInput.length < 3) {
       showError('Username must be at least 3 characters')
       return
     }
-    setUsername(usernameInput)
-    setShowUsernameModal(false)
+    
+    await saveUsername(usernameInput)
     showSuccess(`Welcome, ${usernameInput}!`)
+    setShowUsernameModal(false)
+    
+    if (pendingAction === 'create') {
+      setShowCreateModal(true)
+    } else if (pendingAction === 'join') {
+      setShowJoinModal(true)
+    }
+    
+    setPendingAction(null)
   }
   
-  const handleCreateRoom = () => {
-    if (!username) {
-      setShowUsernameModal(true)
+  const handleCreateRoom = async () => {
+    if (!username) return
+    
+    if (!isSupabaseConfigured()) {
+      showError('Supabase not configured')
       return
     }
-    const newRoomCode = generateRoomCode()
-    showSuccess(`Room created! Code: ${newRoomCode}`)
-    setShowCreateModal(false)
-    // Store room settings in localStorage for the lobby to use
-    localStorage.setItem('pendingRoom', JSON.stringify({ code: newRoomCode, settings, host: username }))
-    navigate(`/lobby/${newRoomCode}`)
+    
+    try {
+      setCreating(true)
+      
+      const { guestId, avatar } = useGuestStore.getState()
+      const room = await gameHelpers.createRoom(guestId, username, gameMode, difficulty, wordPack)
+      
+      showSuccess('Room created!')
+      setShowCreateModal(false)
+      navigate(`/lobby/${room.room_code}`)
+    } catch (error) {
+      console.error('Create room error:', error)
+      showError(error.message || 'Failed to create room')
+    } finally {
+      setCreating(false)
+    }
   }
   
-  const handleJoinRoom = () => {
-    if (!username) {
-      setShowUsernameModal(true)
+  const handleJoinRoom = async () => {
+    if (!username || !roomCodeInput) return
+    
+    if (!isValidRoomCode(roomCodeInput)) {
+      showError('Invalid room code format')
       return
     }
-    if (!roomCode || roomCode.length !== 6) {
-      showError('Please enter a valid 6-character room code')
+    
+    if (!isSupabaseConfigured()) {
+      showError('Supabase not configured')
       return
     }
-    showSuccess('Joined room successfully!')
-    setShowJoinModal(false)
-    navigate(`/lobby/${roomCode.toUpperCase()}`)
+    
+    try {
+      setJoining(true)
+      
+      // Just navigate to lobby, joining happens there
+      showSuccess('Joining room...')
+      setShowJoinModal(false)
+      navigate(`/lobby/${roomCodeInput.toUpperCase()}`)
+    } catch (error) {
+      console.error('Join room error:', error)
+      showError(error.message || 'Failed to join room')
+    } finally {
+      setJoining(false)
+    }
   }
   
   return (
     <PageContainer>
+      <AppHeader />
       <ToastContainer />
+      
       <div className="container mx-auto px-4 py-12">
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-16">
-          <motion.h1 animate={{ textShadow: ['0 0 20px rgba(0,255,255,0.5)', '0 0 40px rgba(138,43,226,0.5)', '0 0 20px rgba(0,255,255,0.5)'] }} transition={{ duration: 3, repeat: Infinity }} className="text-6xl md:text-7xl font-heading font-black text-white mb-4">WordTraitor</motion.h1>
-          <p className="text-xl md:text-2xl text-gray-300 mb-2">One word apart. One traitor among you.</p>
-          <p className="text-gray-400 max-w-2xl mx-auto">A real-time multiplayer social deduction game where clever hints and sharp observations win the day.</p>
-          {username && <p className="text-neon-cyan mt-4">Playing as: <span className="font-bold">{username}</span></p>}
-        </motion.div>
-        <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-16">
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
-            <Card hover glow className="h-full">
-              <div className="text-center py-8">
-                <div className="w-16 h-16 mx-auto mb-4 bg-neon-cyan/20 rounded-full flex items-center justify-center"><Plus size={32} className="text-neon-cyan" /></div>
-                <h3 className="text-2xl font-heading font-bold text-white mb-2">Create Circle</h3>
-                <p className="text-gray-400 mb-6">Start a new game and invite your friends</p>
-                <Button variant="primary" size="lg" onClick={() => setShowCreateModal(true)} className="w-full">Create Room</Button>
-              </div>
-            </Card>
+        <div className="max-w-4xl mx-auto">
+          {/* Hero Section */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mb-12"
+          >
+            <h1 className="text-6xl font-heading font-bold bg-gradient-to-r from-neon-cyan to-neon-purple bg-clip-text text-transparent mb-4">
+              WordTraitor
+            </h1>
+            <p className="text-xl text-gray-400 mb-2">
+              One word apart. One traitor among you.
+            </p>
+            <p className="text-sm text-gray-500">
+              A social deduction word game for 4-12 players
+            </p>
           </motion.div>
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
-            <Card hover glow className="h-full">
-              <div className="text-center py-8">
-                <div className="w-16 h-16 mx-auto mb-4 bg-neon-purple/20 rounded-full flex items-center justify-center"><Users size={32} className="text-neon-purple" /></div>
-                <h3 className="text-2xl font-heading font-bold text-white mb-2">Join Circle</h3>
-                <p className="text-gray-400 mb-6">Enter a room code to join existing game</p>
-                <Button variant="secondary" size="lg" onClick={() => setShowJoinModal(true)} className="w-full">Join Room</Button>
+          
+          {/* Action Cards */}
+          <div className="grid md:grid-cols-2 gap-6 mb-12">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <Card
+                hover
+                className="h-full cursor-pointer"
+                onClick={handleCreateClick}
+              >
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neon-cyan/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Play className="text-neon-cyan" size={32} />
+                  </div>
+                  <h2 className="text-2xl font-heading font-bold text-white mb-2">
+                    Create Circle
+                  </h2>
+                  <p className="text-gray-400 mb-6">
+                    Start a new game and invite friends
+                  </p>
+                  <Button variant="primary" size="lg" icon={Play}>
+                    Create Room
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
+            
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <Card
+                hover
+                className="h-full cursor-pointer"
+                onClick={handleJoinClick}
+              >
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-neon-purple/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Users className="text-neon-purple" size={32} />
+                  </div>
+                  <h2 className="text-2xl font-heading font-bold text-white mb-2">
+                    Join Circle
+                  </h2>
+                  <p className="text-gray-400 mb-6">
+                    Enter a room code to join
+                  </p>
+                  <Button variant="outline" size="lg" icon={Users}>
+                    Join Room
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
+          </div>
+          
+          {/* How to Play */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <Card>
+              <h2 className="text-2xl font-heading font-bold text-white mb-6 text-center">
+                How to Play
+              </h2>
+              
+              <div className="grid sm:grid-cols-3 gap-6">
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span className="text-2xl font-bold text-purple-400">1</span>
+                  </div>
+                  <h3 className="font-bold text-white mb-2">The Whisper</h3>
+                  <p className="text-sm text-gray-400">
+                    Everyone gets a secret word. One player gets a different word - they're the traitor!
+                  </p>
+                </div>
+                
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span className="text-2xl font-bold text-cyan-400">2</span>
+                  </div>
+                  <h3 className="font-bold text-white mb-2">Drop Hints</h3>
+                  <p className="text-sm text-gray-400">
+                    Give hints about your word without revealing it. Be careful not to expose yourself!
+                  </p>
+                </div>
+                
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span className="text-2xl font-bold text-red-400">3</span>
+                  </div>
+                  <h3 className="font-bold text-white mb-2">Find the Traitor</h3>
+                  <p className="text-sm text-gray-400">
+                    Discuss, debate, and vote to eliminate the traitor. But be careful - they're hiding among you!
+                  </p>
+                </div>
               </div>
             </Card>
           </motion.div>
         </div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-heading font-bold text-white text-center mb-8">How to Play</h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[{step:1,title:'Receive Word',desc:'Everyone gets a secret word—except the traitor gets a slightly different one'},{step:2,title:'Give Hints',desc:'Each player submits one-line hints about their word without revealing it'},{step:3,title:'Vote & Win',desc:'Discuss, identify the traitor, and vote. Catch them to win!'}].map((item)=>(<Card key={item.step} className="text-center"><div className="w-12 h-12 mx-auto mb-4 bg-gradient-to-br from-neon-cyan to-neon-purple rounded-full flex items-center justify-center text-2xl font-bold text-white">{item.step}</div><h4 className="text-xl font-heading font-bold text-white mb-2">{item.title}</h4><p className="text-gray-400 text-sm">{item.desc}</p></Card>))}
-          </div>
-        </motion.div>
       </div>
       
-      <Modal isOpen={showUsernameModal} onClose={() => {}} title="Choose Your Username" size="sm" showCloseButton={false}>
-        <div className="space-y-6">
-          <p className="text-gray-400 text-center">Enter a username to start playing</p>
-          <Input label="Username" type="text" placeholder="Enter username" value={usernameInput} onChange={(e)=>setUsernameInput(e.target.value)} maxLength={20} onKeyPress={(e) => e.key === 'Enter' && handleSetUsername()} />
-          <Button variant="primary" size="lg" icon={Play} onClick={handleSetUsername} className="w-full">Start Playing</Button>
+      {/* Username Modal */}
+      <Modal
+        isOpen={showUsernameModal}
+        onClose={() => setShowUsernameModal(false)}
+        title="Choose Your Username"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-400 text-sm">
+            Pick a username to identify yourself in the game
+          </p>
+          <input
+            type="text"
+            value={usernameInput}
+            onChange={(e) => setUsernameInput(e.target.value)}
+            placeholder="Enter username (3-20 characters)"
+            className="w-full px-4 py-3 bg-dark-bg border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-neon-cyan"
+            maxLength={20}
+            onKeyPress={(e) => e.key === 'Enter' && handleUsernameSubmit()}
+            autoFocus
+          />
+          <Button
+            variant="primary"
+            onClick={handleUsernameSubmit}
+            disabled={usernameInput.length < 3}
+            className="w-full"
+          >
+            Start Playing
+          </Button>
         </div>
       </Modal>
       
-      <Modal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} title="Create New Circle" size="md">
+      {/* Create Room Modal */}
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Create Game Room"
+      >
         <div className="space-y-6">
-          <div><label className="block text-sm font-medium text-gray-300 mb-2">Game Mode</label><div className="grid grid-cols-2 gap-2">{Object.values(GAME_MODES).map((mode)=>(<button key={mode} onClick={()=>setSettings(prev=>({...prev,gameMode:mode}))} className={`p-3 rounded-lg border transition-all ${settings.gameMode===mode?'border-neon-cyan bg-neon-cyan/10 text-neon-cyan':'border-gray-700 text-gray-400 hover:border-gray-600'}`}>{getGameModeDisplay(mode)}</button>))}</div></div>
-          <div><label className="block text-sm font-medium text-gray-300 mb-2">Difficulty</label><div className="grid grid-cols-3 gap-2">{Object.values(DIFFICULTY_LEVELS).map((level)=>(<button key={level} onClick={()=>setSettings(prev=>({...prev,difficulty:level}))} className={`p-3 rounded-lg border transition-all ${settings.difficulty===level?'border-neon-cyan bg-neon-cyan/10 text-neon-cyan':'border-gray-700 text-gray-400 hover:border-gray-600'}`}>{getDifficultyDisplay(level)}</button>))}</div></div>
-          <div><label className="block text-sm font-medium text-gray-300 mb-2">Word Pack</label><select value={settings.wordPack} onChange={(e)=>setSettings(prev=>({...prev,wordPack:e.target.value}))} className="w-full px-4 py-3 bg-dark-bg border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-neon-cyan">{Object.values(WORD_PACKS).map((pack)=>(<option key={pack} value={pack}>{getWordPackDisplay(pack)}</option>))}</select></div>
-          <Button variant="primary" size="lg" onClick={handleCreateRoom} className="w-full">Create Circle</Button>
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              Game Mode
+            </label>
+            <select
+              value={gameMode}
+              onChange={(e) => setGameMode(e.target.value)}
+              className="w-full px-4 py-3 bg-dark-bg border border-gray-700 rounded-lg text-white focus:outline-none focus:border-neon-cyan"
+            >
+              <option value="SILENT">Silent Circle</option>
+              <option value="REAL">Real Circle</option>
+              <option value="FLASH">Flash Round</option>
+              <option value="AFTER_DARK">After Dark</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              Difficulty
+            </label>
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value)}
+              className="w-full px-4 py-3 bg-dark-bg border border-gray-700 rounded-lg text-white focus:outline-none focus:border-neon-cyan"
+            >
+              <option value="EASY">Easy</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="HARD">Hard</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              Word Pack
+            </label>
+            <select
+              value={wordPack}
+              onChange={(e) => setWordPack(e.target.value)}
+              className="w-full px-4 py-3 bg-dark-bg border border-gray-700 rounded-lg text-white focus:outline-none focus:border-neon-cyan"
+            >
+              <option value="GENERAL">General</option>
+              <option value="MOVIES">Movies</option>
+              <option value="TECH">Tech</option>
+              <option value="TRAVEL">Travel</option>
+              <option value="FOOD">Food</option>
+            </select>
+          </div>
+          
+          <Button
+            variant="primary"
+            onClick={handleCreateRoom}
+            disabled={creating}
+            className="w-full"
+          >
+            {creating ? 'Creating...' : 'Create Room'}
+          </Button>
         </div>
       </Modal>
       
-      <Modal isOpen={showJoinModal} onClose={() => setShowJoinModal(false)} title="Join Circle" size="sm">
-        <div className="space-y-6"><Input label="Room Code" type="text" placeholder="Enter 6-character code" value={roomCode} onChange={(e)=>setRoomCode(e.target.value.toUpperCase())} maxLength={6} className="text-center text-2xl tracking-widest" onKeyPress={(e) => e.key === 'Enter' && handleJoinRoom()} /><Button variant="primary" size="lg" onClick={handleJoinRoom} className="w-full">Join Circle</Button></div>
+      {/* Join Room Modal */}
+      <Modal
+        isOpen={showJoinModal}
+        onClose={() => setShowJoinModal(false)}
+        title="Join Game Room"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-400 text-sm">
+            Enter the 6-character room code to join
+          </p>
+          <input
+            type="text"
+            value={roomCodeInput}
+            onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
+            placeholder="Enter room code"
+            className="w-full px-4 py-3 bg-dark-bg border border-gray-700 rounded-lg text-white text-center text-2xl font-mono tracking-widest placeholder-gray-500 focus:outline-none focus:border-neon-cyan"
+            maxLength={6}
+            onKeyPress={(e) => e.key === 'Enter' && handleJoinRoom()}
+            autoFocus
+          />
+          <Button
+            variant="primary"
+            onClick={handleJoinRoom}
+            disabled={roomCodeInput.length !== 6 || joining}
+            className="w-full"
+          >
+            {joining ? 'Joining...' : 'Join Room'}
+          </Button>
+        </div>
       </Modal>
     </PageContainer>
   )
