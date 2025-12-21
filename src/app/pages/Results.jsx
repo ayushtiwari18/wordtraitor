@@ -1,283 +1,195 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { gameHelpers } from '../../lib/supabase'
 import { motion } from 'framer-motion'
-import { 
-  Trophy, 
-  Skull, 
-  Home, 
-  RotateCcw,
-  Users,
-  Target
-} from 'lucide-react'
+import useGameStore from '../../store/gameStore'
+import { gameHelpers } from '../../lib/supabase'
 import confetti from 'canvas-confetti'
 
 const Results = () => {
   const { roomId } = useParams()
   const navigate = useNavigate()
   
-  const [room, setRoom] = useState(null)
-  const [participants, setParticipants] = useState([])
+  const { gameResults, participants, myUserId, mySecret, leaveRoom } = useGameStore()
   const [secrets, setSecrets] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [winner, setWinner] = useState(null)
-  const [traitorInfo, setTraitorInfo] = useState(null)
-  
-  const myUserId = localStorage.getItem('guestId')
-  
+  const [loading, setLoading] = useState(true)
+
   useEffect(() => {
-    loadResults()
-  }, [roomId])
-  
-  const loadResults = async () => {
+    // Fire confetti
+    setTimeout(() => {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      })
+    }, 500)
+
+    // Load all secrets (game is over, so we can show them)
+    loadSecrets()
+  }, [])
+
+  const loadSecrets = async () => {
     try {
-      // Get room data
-      const roomData = await gameHelpers.getRoom(roomId)
-      setRoom(roomData)
-      
-      // Get participants
-      const participantsData = await gameHelpers.getParticipants(roomId)
-      setParticipants(participantsData)
-      
-      // Determine winner
-      const gameEnd = await gameHelpers.checkGameEnd(roomId)
-      setWinner(gameEnd.winner)
-      
-      // Get traitor info
-      if (gameEnd.traitorId) {
-        const traitor = participantsData.find(p => p.user_id === gameEnd.traitorId)
-        setTraitorInfo(traitor)
-        
-        // Trigger confetti if I'm on winning team
-        const iAmTraitor = myUserId === gameEnd.traitorId
-        const didIWin = 
-          (gameEnd.winner === 'TRAITOR' && iAmTraitor) ||
-          (gameEnd.winner === 'CITIZENS' && !iAmTraitor)
-        
-        if (didIWin) {
-          triggerConfetti()
-        }
-      }
-      
-      setIsLoading(false)
+      // In a real implementation, you'd need a server function to reveal all secrets
+      // For now, we'll just show what we know
+      setLoading(false)
     } catch (error) {
-      console.error('Failed to load results:', error)
-      setIsLoading(false)
+      console.error('Error loading secrets:', error)
+      setLoading(false)
     }
   }
-  
-  const triggerConfetti = () => {
-    const duration = 3000
-    const end = Date.now() + duration
-    
-    const colors = ['#8b5cf6', '#ec4899', '#3b82f6', '#10b981']
-    
-    ;(function frame() {
-      confetti({
-        particleCount: 3,
-        angle: 60,
-        spread: 55,
-        origin: { x: 0 },
-        colors: colors
-      })
-      confetti({
-        particleCount: 3,
-        angle: 120,
-        spread: 55,
-        origin: { x: 1 },
-        colors: colors
-      })
-      
-      if (Date.now() < end) {
-        requestAnimationFrame(frame)
-      }
-    })()
-  }
-  
-  const handlePlayAgain = () => {
+
+  const handlePlayAgain = async () => {
+    await leaveRoom()
     navigate('/')
   }
-  
-  const handleGoHome = () => {
+
+  const handleGoHome = async () => {
+    await leaveRoom()
     navigate('/')
   }
-  
-  if (isLoading) {
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex items-center justify-center">
-        <div className="text-white text-xl">Loading results...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+        <div className="text-2xl text-purple-400 animate-pulse">Loading results...</div>
       </div>
     )
   }
-  
-  const iAmTraitor = myUserId === traitorInfo?.user_id
-  const didIWin = 
-    (winner === 'TRAITOR' && iAmTraitor) ||
-    (winner === 'CITIZENS' && !iAmTraitor)
-  
-  const alivePlayers = participants.filter(p => p.is_alive)
-  const eliminatedPlayers = participants.filter(p => !p.is_alive)
-  
+
+  const winner = gameResults?.winner
+  const traitorId = gameResults?.traitorId
+  const traitor = participants.find(p => p.user_id === traitorId)
+  const wasITraitor = myUserId === traitorId
+  const didIWin = (winner === 'TRAITOR' && wasITraitor) || (winner === 'CITIZENS' && !wasITraitor)
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 text-white p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 py-12 px-4">
       <div className="max-w-4xl mx-auto">
         {/* Winner Announcement */}
         <motion.div
-          initial={{ scale: 0, rotate: -180 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: 'spring', duration: 1 }}
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', duration: 0.8 }}
           className="text-center mb-12"
         >
-          {didIWin ? (
-            <Trophy className="w-32 h-32 mx-auto mb-6 text-yellow-400" />
-          ) : (
-            <Skull className="w-32 h-32 mx-auto mb-6 text-red-400" />
-          )}
-          
-          <h1 className="text-6xl font-black mb-4">
-            {didIWin ? 'VICTORY!' : 'DEFEAT'}
+          <div className="text-8xl mb-6">
+            {winner === 'TRAITOR' ? '🕵️' : '🏆'}
+          </div>
+          <h1 className="text-5xl font-bold text-white mb-4">
+            {winner === 'TRAITOR' ? 'Traitor Wins!' : 'Citizens Win!'}
           </h1>
-          
-          <div className="text-3xl font-bold mb-2">
-            {winner === 'TRAITOR' ? (
-              <span className="text-red-400">The Traitor Wins!</span>
+          <p className="text-2xl text-gray-400">
+            {didIWin ? (
+              <span className="text-green-400 font-bold">You won! 🎉</span>
             ) : (
-              <span className="text-green-400">Citizens Win!</span>
+              <span className="text-red-400">You lost!</span>
+            )}
+          </p>
+        </motion.div>
+
+        {/* Traitor Reveal */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-gray-800 border-2 border-red-500 rounded-2xl p-8 mb-8"
+        >
+          <div className="text-center">
+            <p className="text-gray-400 mb-3">The traitor was...</p>
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center text-3xl border-2 border-red-500">
+                {traitor?.username?.charAt(0).toUpperCase() || '?'}
+              </div>
+              <div className="text-left">
+                <h2 className="text-3xl font-bold text-white">
+                  {traitor?.username || 'Unknown Player'}
+                </h2>
+                <p className="text-red-400 font-semibold">
+                  {wasITraitor ? '(You!)' : ''}
+                </p>
+              </div>
+            </div>
+            {mySecret && (
+              <div className="mt-6 pt-6 border-t border-gray-700">
+                <p className="text-gray-400 text-sm mb-2">Your role & word:</p>
+                <div className="inline-block px-6 py-3 bg-gray-900 rounded-lg">
+                  <span className={`font-bold ${
+                    mySecret.role === 'TRAITOR' ? 'text-red-400' : 'text-blue-400'
+                  }`}>
+                    {mySecret.role}
+                  </span>
+                  <span className="text-gray-400 mx-2">-</span>
+                  <span className="text-purple-400 font-bold text-xl">
+                    "{mySecret.secret_word}"
+                  </span>
+                </div>
+              </div>
             )}
           </div>
-          
-          {traitorInfo && (
-            <div className="mt-6 bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 inline-block">
-              <p className="text-xl mb-2">The Traitor was:</p>
-              <p className="text-4xl font-black text-red-400">{traitorInfo.username}</p>
-            </div>
-          )}
         </motion.div>
-        
-        {/* Game Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Survivors */}
-          <motion.div
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20"
-          >
-            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-              <Users className="w-6 h-6 text-green-400" />
-              Survivors ({alivePlayers.length})
-            </h2>
-            
-            <div className="space-y-3">
-              {alivePlayers.map((player) => (
-                <div
-                  key={player.id}
-                  className="bg-green-500/20 border border-green-500 p-3 rounded-lg"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{player.username}</span>
-                    {player.user_id === traitorInfo?.user_id && (
-                      <span className="text-xs bg-red-500 px-2 py-1 rounded">TRAITOR</span>
-                    )}
-                    {player.user_id === myUserId && (
-                      <span className="text-xs bg-purple-500 px-2 py-1 rounded">YOU</span>
+
+        {/* Player List */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="bg-gray-800 border-2 border-gray-700 rounded-2xl p-8 mb-8"
+        >
+          <h3 className="text-2xl font-bold text-white mb-6 text-center">Final Standings</h3>
+          <div className="space-y-3">
+            {participants.map((player) => (
+              <div
+                key={player.user_id}
+                className={`p-4 rounded-lg border-2 flex items-center justify-between ${
+                  player.user_id === traitorId
+                    ? 'bg-red-500/10 border-red-500'
+                    : 'bg-gray-900 border-gray-700'
+                } ${!player.is_alive ? 'opacity-50' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
+                    {player.username?.charAt(0).toUpperCase() || '?'}
+                  </div>
+                  <div>
+                    <p className="text-white font-semibold">
+                      {player.username || `Player ${player.user_id.slice(0, 6)}`}
+                      {player.user_id === myUserId && ' (You)'}
+                    </p>
+                    {player.user_id === traitorId && (
+                      <p className="text-red-400 text-sm font-semibold">🕵️ Traitor</p>
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
-          </motion.div>
-          
-          {/* Eliminated */}
-          <motion.div
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20"
-          >
-            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-              <Target className="w-6 h-6 text-red-400" />
-              Eliminated ({eliminatedPlayers.length})
-            </h2>
-            
-            <div className="space-y-3">
-              {eliminatedPlayers.length > 0 ? (
-                eliminatedPlayers.map((player) => (
-                  <div
-                    key={player.id}
-                    className="bg-red-500/20 border border-red-500 p-3 rounded-lg"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{player.username}</span>
-                      {player.user_id === traitorInfo?.user_id && (
-                        <span className="text-xs bg-red-500 px-2 py-1 rounded">TRAITOR</span>
-                      )}
-                      {player.user_id === myUserId && (
-                        <span className="text-xs bg-purple-500 px-2 py-1 rounded">YOU</span>
-                      )}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-400 text-center py-4">No one was eliminated</p>
-              )}
-            </div>
-          </motion.div>
-        </div>
-        
-        {/* Game Stats */}
-        <motion.div
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 mb-8"
-        >
-          <h2 className="text-2xl font-bold mb-4">Game Stats</h2>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white/5 p-4 rounded-lg text-center">
-              <p className="text-3xl font-bold text-purple-400">{participants.length}</p>
-              <p className="text-sm text-gray-300">Total Players</p>
-            </div>
-            
-            <div className="bg-white/5 p-4 rounded-lg text-center">
-              <p className="text-3xl font-bold text-blue-400">{room?.current_round || 1}</p>
-              <p className="text-sm text-gray-300">Rounds Played</p>
-            </div>
-            
-            <div className="bg-white/5 p-4 rounded-lg text-center">
-              <p className="text-3xl font-bold text-green-400">{room?.game_mode || 'SILENT'}</p>
-              <p className="text-sm text-gray-300">Game Mode</p>
-            </div>
-            
-            <div className="bg-white/5 p-4 rounded-lg text-center">
-              <p className="text-3xl font-bold text-yellow-400">{room?.difficulty || 'MEDIUM'}</p>
-              <p className="text-sm text-gray-300">Difficulty</p>
-            </div>
+                <div className="text-right">
+                  {player.is_alive ? (
+                    <span className="text-green-400 font-semibold">✓ Survived</span>
+                  ) : (
+                    <span className="text-red-400">❌ Eliminated</span>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </motion.div>
-        
+
         {/* Action Buttons */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
-          className="flex flex-col sm:flex-row gap-4 justify-center"
+          className="flex gap-4 justify-center"
         >
           <button
             onClick={handlePlayAgain}
-            className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 px-8 py-4 rounded-xl font-bold text-lg hover:from-purple-600 hover:to-pink-600 transition-all"
+            className="px-8 py-4 bg-purple-600 hover:bg-purple-700 rounded-xl font-bold text-white text-lg transition-colors shadow-lg"
           >
-            <RotateCcw className="w-6 h-6" />
-            Play Again
+            🔁 Play Again
           </button>
-          
           <button
             onClick={handleGoHome}
-            className="flex items-center justify-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 px-8 py-4 rounded-xl font-bold text-lg hover:bg-white/20 transition-all"
+            className="px-8 py-4 bg-gray-700 hover:bg-gray-600 rounded-xl font-bold text-white text-lg transition-colors"
           >
-            <Home className="w-6 h-6" />
-            Home
+            🏠 Go Home
           </button>
         </motion.div>
       </div>
