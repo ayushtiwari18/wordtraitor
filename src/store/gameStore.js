@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase, gameHelpers, realtimeHelpers } from '../lib/supabase'
+import { createBotSquad, BotManager } from '../lib/aiBot'
 
 // Game phases with durations (in seconds)
 export const GAME_PHASES = {
@@ -38,6 +39,12 @@ const useGameStore = create((set, get) => ({
   showResults: false,
   gameResults: null,
 
+  // TEST MODE
+  isTestMode: false,
+  bots: [],
+  botManager: null,
+  botSecrets: {}, // Store bot secrets for AI decisions
+
   // ==========================================
   // INITIALIZATION
   // ==========================================
@@ -51,6 +58,123 @@ const useGameStore = create((set, get) => ({
     
     set({ myUserId: guestId, myUsername: guestUsername })
     return { guestId, guestUsername }
+  },
+
+  // ==========================================
+  // TEST MODE
+  // ==========================================
+
+  startTestMode: async () => {
+    set({ isLoading: true, error: null, isTestMode: true })
+    
+    try {
+      const { guestId, guestUsername } = get().initializeGuest()
+      
+      // Create bots
+      const bots = createBotSquad()
+      const botManager = new BotManager(bots)
+      
+      // Create mock room (no database)
+      const mockRoom = {
+        id: `test_room_${Date.now()}`,
+        room_code: 'TEST00',
+        host_id: guestId,
+        status: 'LOBBY',
+        game_mode: 'SILENT',
+        difficulty: 'MEDIUM',
+        word_pack: 'GENERAL',
+        max_players: 8
+      }
+
+      // Create mock participants (you + 4 bots)
+      const mockParticipants = [
+        {
+          id: `p_${guestId}`,
+          room_id: mockRoom.id,
+          user_id: guestId,
+          username: guestUsername,
+          is_alive: true
+        },
+        ...bots.map(bot => ({
+          id: `p_${bot.id}`,
+          room_id: mockRoom.id,
+          user_id: bot.id,
+          username: bot.name,
+          is_alive: true
+        }))
+      ]
+
+      set({
+        room: mockRoom,
+        roomId: mockRoom.id,
+        participants: mockParticipants,
+        bots,
+        botManager,
+        isHost: true,
+        isLoading: false,
+        isConnected: true // Mock connection
+      })
+
+      console.log('🤖 Test mode initialized with 4 AI bots')
+      return mockRoom
+      
+    } catch (error) {
+      set({ error: error.message, isLoading: false })
+      throw error
+    }
+  },
+
+  startTestGame: async () => {
+    set({ isLoading: true })
+    
+    try {
+      const { participants, myUserId, bots } = get()
+      
+      // Randomly select traitor
+      const allPlayers = participants
+      const traitorIndex = Math.floor(Math.random() * allPlayers.length)
+      const traitorId = allPlayers[traitorIndex].user_id
+
+      // Mock word pairs
+      const wordPair = {
+        main_word: 'Ocean',
+        traitor_word: 'Sea'
+      }
+
+      // Assign roles
+      const myRole = traitorId === myUserId ? 'TRAITOR' : 'CITIZEN'
+      const myWord = traitorId === myUserId ? wordPair.traitor_word : wordPair.main_word
+
+      set({ 
+        mySecret: { role: myRole, secret_word: myWord },
+        gamePhase: 'WHISPER'
+      })
+
+      // Store bot secrets
+      const botSecrets = {}
+      bots.forEach(bot => {
+        const isBotTraitor = traitorId === bot.id
+        botSecrets[bot.id] = {
+          role: isBotTraitor ? 'TRAITOR' : 'CITIZEN',
+          secret_word: isBotTraitor ? wordPair.traitor_word : wordPair.main_word
+        }
+        bot.role = botSecrets[bot.id].role
+        bot.secretWord = botSecrets[bot.id].secret_word
+      })
+
+      set({ botSecrets, isLoading: false })
+
+      console.log('🎮 Test game started!')
+      console.log(`🕵️ Traitor: ${allPlayers[traitorIndex].username}`)
+      console.log(`👤 Your role: ${myRole} (${myWord})`)
+
+      // Start phase timer
+      get().startPhaseTimer('WHISPER')
+      
+    } catch (error) {
+      set({ error: error.message, isLoading: false })
+      throw error
+    }
   },
 
   // ==========================================
@@ -135,10 +259,10 @@ const useGameStore = create((set, get) => ({
   },
 
   leaveRoom: async () => {
-    const { roomId, myUserId, realtimeChannel } = get()
+    const { roomId, myUserId, realtimeChannel, isTestMode } = get()
     
     try {
-      if (roomId && myUserId) {
+      if (!isTestMode && roomId && myUserId) {
         await gameHelpers.leaveRoom(roomId, myUserId)
       }
       
@@ -169,7 +293,11 @@ const useGameStore = create((set, get) => ({
         realtimeChannel: null,
         isConnected: false,
         showResults: false,
-        gameResults: null
+        gameResults: null,
+        isTestMode: false,
+        bots: [],
+        botManager: null,
+        botSecrets: {}
       })
     } catch (error) {
       console.error('Error leaving room:', error)
@@ -181,6 +309,12 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   startGame: async () => {
+    const { isTestMode } = get()
+    
+    if (isTestMode) {
+      return get().startTestGame()
+    }
+
     set({ isLoading: true, error: null })
     
     try {
@@ -240,10 +374,26 @@ const useGameStore = create((set, get) => ({
     }, 1000)
     
     set({ phaseInterval: interval })
+
+    // Trigger bot actions for test mode
+    const { isTestMode, botManager } = get()
+    if (isTestMode && botManager) {
+      const gameState = {
+        roomId: get().roomId,
+        hints: get().hints,
+        votes: get().votes,
+        participants: get().participants,
+        botSecrets: get().botSecrets
+      }
+      botManager.handlePhase(phaseName, gameState, {
+        submitHint: get().submitTestHint,
+        submitVote: get().submitTestVote
+      })
+    }
   },
 
   advancePhase: async () => {
-    const { gamePhase, roomId } = get()
+    const { gamePhase, roomId, isTestMode } = get()
     const currentPhase = GAME_PHASES[gamePhase]
     
     if (!currentPhase?.next) {
@@ -256,9 +406,9 @@ const useGameStore = create((set, get) => ({
     
     // Load data for new phase
     if (currentPhase.next === 'DEBATE') {
-      await get().loadHints()
+      if (!isTestMode) await get().loadHints()
     } else if (currentPhase.next === 'REVEAL') {
-      await get().loadVotes()
+      if (!isTestMode) await get().loadVotes()
     }
     
     // Start timer for next phase
@@ -274,11 +424,15 @@ const useGameStore = create((set, get) => ({
   },
 
   // ==========================================
-  // HINTS
+  // HINTS (with test mode support)
   // ==========================================
   
   submitHint: async (hintText) => {
-    const { roomId, myUserId } = get()
+    const { roomId, myUserId, isTestMode } = get()
+    
+    if (isTestMode) {
+      return get().submitTestHint(roomId, myUserId, hintText)
+    }
     
     try {
       await gameHelpers.submitHint(roomId, myUserId, hintText)
@@ -287,6 +441,18 @@ const useGameStore = create((set, get) => ({
       set({ error: error.message })
       throw error
     }
+  },
+
+  submitTestHint: async (roomId, userId, hintText) => {
+    const { hints } = get()
+    const newHint = {
+      id: `hint_${Date.now()}_${Math.random()}`,
+      room_id: roomId,
+      user_id: userId,
+      hint_text: hintText,
+      submitted_at: new Date().toISOString()
+    }
+    set({ hints: [...hints, newHint] })
   },
 
   loadHints: async () => {
@@ -301,11 +467,15 @@ const useGameStore = create((set, get) => ({
   },
 
   // ==========================================
-  // VOTING
+  // VOTING (with test mode support)
   // ==========================================
   
   submitVote: async (targetId) => {
-    const { roomId, myUserId } = get()
+    const { roomId, myUserId, isTestMode } = get()
+    
+    if (isTestMode) {
+      return get().submitTestVote(roomId, myUserId, targetId)
+    }
     
     try {
       await gameHelpers.submitVote(roomId, myUserId, targetId)
@@ -314,6 +484,18 @@ const useGameStore = create((set, get) => ({
       set({ error: error.message })
       throw error
     }
+  },
+
+  submitTestVote: async (roomId, voterId, targetId) => {
+    const { votes } = get()
+    const newVote = {
+      id: `vote_${Date.now()}_${Math.random()}`,
+      room_id: roomId,
+      voter_id: voterId,
+      target_id: targetId,
+      voted_at: new Date().toISOString()
+    }
+    set({ votes: [...votes, newVote] })
   },
 
   loadVotes: async () => {
@@ -328,19 +510,46 @@ const useGameStore = create((set, get) => ({
   },
 
   // ==========================================
-  // WIN CONDITIONS
+  // WIN CONDITIONS (with test mode support)
   // ==========================================
   
   checkWinConditions: async () => {
-    const { roomId } = get()
+    const { roomId, isTestMode, participants, botSecrets, mySecret } = get()
     
     try {
-      // Calculate vote results
-      const { eliminatedId, voteCounts } = await gameHelpers.calculateVoteResults(roomId)
+      let eliminatedId, voteCounts
+
+      if (isTestMode) {
+        // Calculate votes locally
+        const { votes } = get()
+        voteCounts = {}
+        votes.forEach(vote => {
+          voteCounts[vote.target_id] = (voteCounts[vote.target_id] || 0) + 1
+        })
+        
+        let maxVotes = 0
+        Object.entries(voteCounts).forEach(([id, count]) => {
+          if (count > maxVotes) {
+            maxVotes = count
+            eliminatedId = id
+          }
+        })
+      } else {
+        const results = await gameHelpers.calculateVoteResults(roomId)
+        eliminatedId = results.eliminatedId
+        voteCounts = results.voteCounts
+      }
       
       if (eliminatedId) {
         // Eliminate player
-        await gameHelpers.eliminatePlayer(roomId, eliminatedId)
+        const updatedParticipants = participants.map(p => 
+          p.user_id === eliminatedId ? { ...p, is_alive: false } : p
+        )
+        set({ participants: updatedParticipants })
+        
+        if (!isTestMode) {
+          await gameHelpers.eliminatePlayer(roomId, eliminatedId)
+        }
         
         // Add to eliminated list
         const { eliminated } = get()
@@ -348,36 +557,57 @@ const useGameStore = create((set, get) => ({
       }
       
       // Check if game should end
-      const gameEnd = await gameHelpers.checkGameEnd(roomId)
+      const alive = participants.filter(p => p.is_alive)
       
-      if (gameEnd.ended) {
-        // End game
-        const results = await gameHelpers.endGame(roomId, gameEnd.winner, gameEnd.traitorId)
-        
+      // Find traitor
+      let traitorId
+      if (isTestMode) {
+        // Check bot secrets and my secret
+        traitorId = mySecret?.role === 'TRAITOR' ? get().myUserId : 
+                   Object.entries(botSecrets).find(([id, secret]) => secret.role === 'TRAITOR')?.[0]
+      } else {
+        const gameEnd = await gameHelpers.checkGameEnd(roomId)
+        if (gameEnd.ended) {
+          const results = { ...gameEnd, voteCounts }
+          set({ showResults: true, gameResults: results })
+          
+          const { phaseInterval } = get()
+          if (phaseInterval) clearInterval(phaseInterval)
+          return
+        }
+      }
+
+      const isTraitorAlive = alive.some(p => p.user_id === traitorId)
+      
+      // Citizens win if traitor eliminated
+      if (!isTraitorAlive) {
         set({ 
           showResults: true,
-          gameResults: {
-            ...results,
-            winner: gameEnd.winner,
-            traitorId: gameEnd.traitorId,
-            voteCounts
-          }
+          gameResults: { winner: 'CITIZENS', traitorId, voteCounts }
         })
-        
-        // Clear timer
         const { phaseInterval } = get()
-        if (phaseInterval) {
-          clearInterval(phaseInterval)
-        }
-      } else {
-        // Continue to next round - restart from WHISPER
-        set({ 
-          gamePhase: 'WHISPER',
-          hints: [],
-          votes: []
-        })
-        get().startPhaseTimer('WHISPER')
+        if (phaseInterval) clearInterval(phaseInterval)
+        return
       }
+      
+      // Traitor wins if only 2 players left
+      if (alive.length <= 2) {
+        set({ 
+          showResults: true,
+          gameResults: { winner: 'TRAITOR', traitorId, voteCounts }
+        })
+        const { phaseInterval } = get()
+        if (phaseInterval) clearInterval(phaseInterval)
+        return
+      }
+      
+      // Continue to next round
+      set({ 
+        gamePhase: 'WHISPER',
+        hints: [],
+        votes: []
+      })
+      get().startPhaseTimer('WHISPER')
       
     } catch (error) {
       console.error('Error checking win conditions:', error)
