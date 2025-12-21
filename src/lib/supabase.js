@@ -69,12 +69,25 @@ export const gameHelpers = {
     // Find room by code
     const { data: room, error: roomError } = await supabase
       .from('game_rooms')
-      .select('id, status, max_players')
+      .select('*')
       .eq('room_code', roomCode.toUpperCase())
       .eq('status', 'LOBBY')
       .single()
     
     if (roomError) throw new Error('Room not found or already started')
+    
+    // Check if already joined
+    const { data: existing } = await supabase
+      .from('room_participants')
+      .select('user_id')
+      .eq('room_id', room.id)
+      .eq('user_id', guestId)
+      .single()
+    
+    if (existing) {
+      console.log('Already in room, skipping join')
+      return { room }
+    }
     
     // Check player count
     const { count } = await supabase
@@ -97,6 +110,61 @@ export const gameHelpers = {
     
     if (error) throw error
     return { ...data, room }
+  },
+
+  // Auto-join room (used when loading existing room)
+  autoJoinRoom: async (roomId, guestId, username) => {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    // Check if room is still in lobby
+    const { data: room } = await supabase
+      .from('game_rooms')
+      .select('status, max_players')
+      .eq('id', roomId)
+      .single()
+    
+    if (!room || room.status !== 'LOBBY') {
+      console.log('Cannot auto-join: room not in lobby')
+      return null
+    }
+    
+    // Check if already joined
+    const { data: existing } = await supabase
+      .from('room_participants')
+      .select('user_id')
+      .eq('room_id', roomId)
+      .eq('user_id', guestId)
+      .single()
+    
+    if (existing) {
+      console.log('Already in room')
+      return existing
+    }
+    
+    // Check player count
+    const { count } = await supabase
+      .from('room_participants')
+      .select('*', { count: 'exact', head: true })
+      .eq('room_id', roomId)
+    
+    if (count >= room.max_players) {
+      throw new Error('Room is full')
+    }
+    
+    // Join room
+    const { data, error } = await supabase
+      .from('room_participants')
+      .insert({
+        room_id: roomId,
+        user_id: guestId,
+        username: username
+      })
+      .select()
+      .single()
+    
+    if (error) throw error
+    console.log('✅ Auto-joined room')
+    return data
   },
 
   // Get room details
