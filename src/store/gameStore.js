@@ -134,6 +134,13 @@ const useGameStore = create((set, get) => ({
   },
 
   loadRoom: async (roomId) => {
+    // CRITICAL FIX: Skip if already loaded this room
+    const { roomId: currentRoomId, realtimeChannel } = get()
+    if (currentRoomId === roomId && realtimeChannel) {
+      console.log('⏭️ Room already loaded, skipping')
+      return get().room
+    }
+    
     console.log('📥 Loading room:', roomId)
     set({ isLoading: true, error: null })
     
@@ -146,7 +153,6 @@ const useGameStore = create((set, get) => ({
       
       const participants = await gameHelpers.getParticipants(roomId)
       console.log('👥 Participants loaded:', participants.length, 'players')
-      console.log('Players:', participants.map(p => p.username))
       
       // Check if I'm already in the room
       const alreadyJoined = participants.some(p => p.user_id === guestId)
@@ -171,7 +177,7 @@ const useGameStore = create((set, get) => ({
         isLoading: false
       })
       
-      // Subscribe to real-time updates
+      // Subscribe to real-time updates (this will cleanup old subscription)
       get().subscribeToRoom(roomId)
       
       return room
@@ -183,7 +189,7 @@ const useGameStore = create((set, get) => ({
   },
 
   leaveRoom: async () => {
-    const { roomId, myUserId, realtimeChannel } = get()
+    const { roomId, myUserId, realtimeChannel, phaseInterval } = get()
     console.log('👋 Leaving room...')
     
     try {
@@ -198,7 +204,6 @@ const useGameStore = create((set, get) => ({
       }
       
       // Clear phase timer
-      const { phaseInterval } = get()
       if (phaseInterval) {
         clearInterval(phaseInterval)
       }
@@ -465,11 +470,20 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   subscribeToRoom: (roomId) => {
+    const { realtimeChannel: existingChannel } = get()
+    
+    // CRITICAL FIX: Cleanup existing subscription first
+    if (existingChannel) {
+      console.log('🔄 Cleaning up previous subscription')
+      realtimeHelpers.unsubscribe(existingChannel)
+      set({ realtimeChannel: null, isConnected: false })
+    }
+    
     console.log('📡 Subscribing to real-time updates for room:', roomId)
     
     const channel = realtimeHelpers.subscribeToRoom(roomId, {
       onRoomUpdate: (payload) => {
-        console.log('🔄 Room updated:', payload)
+        console.log('🔄 Room updated:', payload.eventType)
         const { room } = get()
         
         if (payload.eventType === 'UPDATE') {
@@ -488,7 +502,6 @@ const useGameStore = create((set, get) => ({
         console.log('👥 Participants updated')
         const { roomId } = get()
         const participants = await gameHelpers.getParticipants(roomId)
-        console.log('New participants:', participants.map(p => p.username))
         set({ participants })
       },
       
@@ -514,6 +527,12 @@ const useGameStore = create((set, get) => ({
     try {
       // Load my secret
       const mySecret = await gameHelpers.getMySecret(roomId, myUserId)
+      
+      if (!mySecret) {
+        console.log('⏳ Secret not assigned yet, waiting...')
+        return
+      }
+      
       console.log('📝 Synced - My role:', mySecret.role, '| Word:', mySecret.secret_word)
       
       set({ 
