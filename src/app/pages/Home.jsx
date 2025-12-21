@@ -31,9 +31,12 @@ const Home = () => {
 
     setIsJoining(true)
     try {
+      console.log('🚪 Joining room with code:', roomCode)
       const room = await joinRoom(roomCode.toUpperCase())
+      console.log('✅ Room joined, navigating to:', `/lobby/${room.id}`)
       navigate(`/lobby/${room.id}`)
     } catch (err) {
+      console.error('❌ Join error:', err)
       setError(err.message)
     } finally {
       setIsJoining(false)
@@ -46,9 +49,20 @@ const Home = () => {
     setIsCreating(true)
 
     try {
+      console.log('🏠 Creating room with:', { gameMode, difficulty, wordPack })
       const room = await createRoom(gameMode, difficulty, wordPack)
+      console.log('✅ Room created:', room)
+      console.log('📍 Room ID:', room.id)
+      console.log('🧭 Navigating to:', `/lobby/${room.id}`)
+      
+      // Ensure room.id exists before navigating
+      if (!room || !room.id) {
+        throw new Error('Room creation failed - no room ID returned')
+      }
+      
       navigate(`/lobby/${room.id}`)
     } catch (err) {
+      console.error('❌ Create error:', err)
       setError(err.message)
     } finally {
       setIsCreating(false)
