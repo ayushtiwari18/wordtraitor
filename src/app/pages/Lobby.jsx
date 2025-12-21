@@ -1,320 +1,330 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Copy, Play, Users as UsersIcon, Settings as SettingsIcon, LogOut } from 'lucide-react'
-import { useGuestStore } from '@/store/guestStore'
-import { useUIStore } from '@/store/uiStore'
-import { useGameStore } from '@/store/gameStore'
-import { gameHelpers } from '@/lib/supabase'
-import { copyToClipboard, getGameModeDisplay, getDifficultyDisplay, getWordPackDisplay } from '@/lib/utils'
-import PageContainer from '@/components/PageContainer'
-import AppHeader from '@/components/AppHeader'
-import Button from '@/components/Button'
-import Card from '@/components/Card'
-import ToastContainer from '@/components/Toast'
+import { useNavigate, useParams } from 'react-router-dom'
+import { gameHelpers, realtimeHelpers } from '../../lib/supabase'
+import { motion, AnimatePresence } from 'framer-motion'
+import { 
+  Users, 
+  Copy, 
+  Check, 
+  LogOut, 
+  Play,
+  Settings,
+  Crown,
+  User
+} from 'lucide-react'
+import toast, { Toaster } from 'react-hot-toast'
 
 const Lobby = () => {
   const { roomCode } = useParams()
   const navigate = useNavigate()
-  const { guestId, username, avatar } = useGuestStore()
-  const { showSuccess, showError } = useUIStore()
-  const {
-    roomId,
-    hostId,
-    gameMode,
-    difficulty,
-    wordPack,
-    participants,
-    status,
-    initRoom,
-    setParticipants,
-    subscribeToRoom,
-    unsubscribe,
-    startGame,
-    isLoading
-  } = useGameStore()
   
   const [room, setRoom] = useState(null)
-  const [loadingRoom, setLoadingRoom] = useState(true)
+  const [participants, setParticipants] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [copied, setCopied] = useState(false)
+  const [realtimeChannel, setRealtimeChannel] = useState(null)
+  
+  const myUserId = localStorage.getItem('guestId')
+  const myUsername = localStorage.getItem('guestName')
+  const isHost = room?.host_id === myUserId
   
   useEffect(() => {
-    if (!username) {
+    if (!myUserId || !myUsername) {
       navigate('/')
       return
     }
     
-    loadRoom()
+    loadLobbyData()
     
     return () => {
-      unsubscribe()
+      if (realtimeChannel) {
+        realtimeHelpers.unsubscribe(realtimeChannel)
+      }
     }
-  }, [roomCode, username])
+  }, [roomCode])
   
-  useEffect(() => {
-    if (status === 'PLAYING') {
-      // Game started, navigate to game page
-      navigate(`/game/${roomId}`)
-    }
-  }, [status, roomId])
-  
-  const loadRoom = async () => {
+  const loadLobbyData = async () => {
     try {
-      // Check if room exists in Supabase
+      // Find room by code
       const { data: rooms, error } = await gameHelpers.supabase
         .from('game_rooms')
         .select('*')
         .eq('room_code', roomCode.toUpperCase())
         .single()
       
-      if (error || !rooms) {
-        // Room not in database, check localStorage for pending room
-        const pendingRoom = localStorage.getItem('pendingRoom')
-        if (pendingRoom) {
-          const roomData = JSON.parse(pendingRoom)
-          if (roomData.code === roomCode) {
-            // Create room in Supabase
-            const newRoom = await gameHelpers.createRoom(
-              guestId,
-              username,
-              roomData.settings.gameMode,
-              roomData.settings.difficulty,
-              roomData.settings.wordPack
-            )
-            
-            setRoom(newRoom)
-            initRoom(newRoom)
-            
-            // Load participants
-            const participants = await gameHelpers.getParticipants(newRoom.id)
-            setParticipants(participants)
-            
-            // Subscribe to real-time updates
-            subscribeToRoom(newRoom.id)
-            
-            localStorage.removeItem('pendingRoom')
-          } else {
-            showError('Room not found')
-            navigate('/')
-          }
-        } else {
-          showError('Room not found')
-          navigate('/')
-        }
-      } else {
-        // Room exists in database
-        setRoom(rooms)
-        initRoom(rooms)
-        
-        // Check if already joined
-        const participants = await gameHelpers.getParticipants(rooms.id)
-        const alreadyJoined = participants.some(p => p.user_id === guestId)
-        
-        if (!alreadyJoined) {
-          // Join room
-          await gameHelpers.joinRoom(roomCode, guestId, username)
-          const updatedParticipants = await gameHelpers.getParticipants(rooms.id)
-          setParticipants(updatedParticipants)
-        } else {
-          setParticipants(participants)
-        }
-        
-        // Subscribe to real-time updates
-        subscribeToRoom(rooms.id)
-      }
+      if (error) throw error
       
-      setLoadingRoom(false)
+      setRoom(rooms)
+      
+      // Get participants
+      const participantsData = await gameHelpers.getParticipants(rooms.id)
+      setParticipants(participantsData)
+      
+      // Setup real-time
+      setupRealtime(rooms.id)
+      
+      setIsLoading(false)
     } catch (error) {
-      console.error('Load room error:', error)
-      showError(error.message || 'Failed to load room')
-      setLoadingRoom(false)
+      console.error('Failed to load lobby:', error)
+      toast.error('Failed to load lobby')
+      navigate('/')
     }
   }
   
-  const handleCopyCode = async () => {
-    const success = await copyToClipboard(roomCode)
-    if (success) {
-      showSuccess('Room code copied!')
-    } else {
-      showError('Failed to copy')
+  const setupRealtime = (roomId) => {
+    const channel = realtimeHelpers.subscribeToRoom(roomId, {
+      onRoomUpdate: async (payload) => {
+        console.log('Room update:', payload)
+        const updatedRoom = payload.new
+        setRoom(updatedRoom)
+        
+        // If game started, navigate to game
+        if (updatedRoom.status === 'PLAYING') {
+          navigate(`/game/${roomId}`)
+        }
+      },
+      
+      onParticipantUpdate: async (payload) => {
+        console.log('Participant update:', payload)
+        const participantsData = await gameHelpers.getParticipants(roomId)
+        setParticipants(participantsData)
+      },
+      
+      onHintSubmitted: () => {},
+      onVoteSubmitted: () => {}
+    })
+    
+    setRealtimeChannel(channel)
+  }
+  
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(roomCode)
+    setCopied(true)
+    toast.success('Room code copied!')
+    setTimeout(() => setCopied(false), 2000)
+  }
+  
+  const handleLeave = async () => {
+    try {
+      await gameHelpers.leaveRoom(room.id, myUserId)
+      navigate('/')
+    } catch (error) {
+      console.error('Failed to leave room:', error)
+      toast.error('Failed to leave room')
     }
   }
   
   const handleStartGame = async () => {
-    if (participants.length < 4) {
-      showError('Need at least 4 players!')
-      return
-    }
-    
-    if (hostId !== guestId) {
-      showError('Only the host can start the game')
+    if (participants.length < 3) {
+      toast.error('Need at least 3 players to start!')
       return
     }
     
     try {
-      await startGame()
-      showSuccess('Starting game...')
+      toast.loading('Starting game...')
+      
+      // Start game
+      await gameHelpers.startGame(room.id)
+      
+      // Assign roles and words
+      await gameHelpers.assignRoles(
+        room.id,
+        participants,
+        room.difficulty,
+        room.word_pack
+      )
+      
+      toast.dismiss()
+      toast.success('Game started!')
+      
+      // Navigate to game
+      navigate(`/game/${room.id}`)
     } catch (error) {
-      showError(error.message || 'Failed to start game')
+      console.error('Failed to start game:', error)
+      toast.dismiss()
+      toast.error('Failed to start game')
     }
   }
   
-  const handleLeaveRoom = async () => {
-    try {
-      if (roomId) {
-        await gameHelpers.leaveRoom(roomId, guestId)
-      }
-      unsubscribe()
-      localStorage.removeItem('pendingRoom')
-      navigate('/')
-    } catch (error) {
-      console.error('Leave room error:', error)
-      navigate('/')
-    }
-  }
-  
-  const isHost = guestId === hostId
-  
-  if (loadingRoom) {
+  if (isLoading) {
     return (
-      <PageContainer>
-        <AppHeader />
-        <div className="flex items-center justify-center min-h-screen">
-          <Card className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neon-cyan mx-auto mb-4" />
-            <p className="text-white">Loading lobby...</p>
-          </Card>
-        </div>
-      </PageContainer>
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex items-center justify-center">
+        <div className="text-white text-xl">Loading lobby...</div>
+      </div>
     )
   }
   
-  if (!room) {
-    return null
-  }
-  
   return (
-    <PageContainer>
-      <AppHeader />
-      <ToastContainer />
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 text-white p-6">
+      <Toaster position="top-center" />
       
-      <div className="container mx-auto px-4 py-12">
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto">
-          <Card glow className="mb-8">
-            <div className="text-center">
-              <h1 className="text-4xl font-heading font-bold text-white mb-4">Game Lobby</h1>
-              <div className="flex items-center justify-center gap-4 mb-6">
-                <div className="text-6xl font-bold font-mono text-neon-cyan tracking-widest">{roomCode}</div>
-                <Button variant="outline" size="sm" icon={Copy} onClick={handleCopyCode}>Copy</Button>
-              </div>
-              <div className="flex items-center justify-center gap-6 text-gray-400 flex-wrap">
-                <span>Mode: <span className="text-white">{getGameModeDisplay(gameMode)}</span></span>
-                <span className="hidden sm:inline">•</span>
-                <span>Difficulty: <span className="text-white">{getDifficultyDisplay(difficulty)}</span></span>
-                <span className="hidden sm:inline">•</span>
-                <span>Pack: <span className="text-white">{getWordPackDisplay(wordPack)}</span></span>
-              </div>
-            </div>
-          </Card>
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <motion.h1 
+            initial={{ y: -50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="text-5xl font-black mb-4"
+          >
+            Lobby
+          </motion.h1>
           
-          <div className="grid md:grid-cols-2 gap-6 mb-8">
-            <Card>
-              <div className="flex items-center gap-3 mb-4">
-                <UsersIcon className="text-neon-cyan" size={24} />
-                <h2 className="text-2xl font-heading font-bold text-white">Players ({participants.length}/8)</h2>
-              </div>
-              <div className="space-y-3">
-                {participants.map((p, i) => (
-                  <motion.div
-                    key={p.user_id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.1 }}
-                    className="flex items-center gap-3 p-3 bg-dark-bg rounded-lg"
-                  >
-                    <img
-                      src={p.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.username}`}
-                      alt="Avatar"
-                      className="w-10 h-10 rounded-full"
-                    />
-                    <div className="flex-1">
-                      <p className="text-white font-medium">{p.username}</p>
-                      {p.user_id === hostId && <span className="text-xs text-neon-cyan">Host</span>}
-                    </div>
-                    <span className="text-green-500 text-sm">Ready</span>
-                  </motion.div>
-                ))}
-                {participants.length < 4 && (
-                  <div className="text-center py-4 text-gray-500">
-                    <p>Waiting for {4 - participants.length} more player{4 - participants.length !== 1 ? 's' : ''}...</p>
-                    <p className="text-xs mt-2">Share the code!</p>
-                  </div>
-                )}
-              </div>
-            </Card>
-            
-            <Card>
-              <div className="flex items-center gap-3 mb-4">
-                <SettingsIcon className="text-neon-purple" size={24} />
-                <h2 className="text-2xl font-heading font-bold text-white">Game Info</h2>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm text-gray-400 mb-1">How to Play</h3>
-                  <ol className="text-white text-sm space-y-2 list-decimal list-inside">
-                    <li>Everyone receives a secret word</li>
-                    <li>One player gets different word (traitor)</li>
-                    <li>Give hints about your word</li>
-                    <li>Discuss and vote for traitor</li>
-                    <li>Catch the traitor to win!</li>
-                  </ol>
-                </div>
-                <div className="pt-4 border-t border-gray-700">
-                  <p className="text-sm text-gray-400 mb-2">Share code:</p>
-                  <input
-                    type="text"
-                    readOnly
-                    value={`Join WordTraitor: ${roomCode}`}
-                    className="w-full px-3 py-2 bg-dark-bg border border-gray-700 rounded text-white text-sm"
-                  />
-                </div>
-              </div>
-            </Card>
+          {/* Room Code */}
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md border border-white/20 px-6 py-3 rounded-2xl"
+          >
+            <span className="text-sm text-gray-300">Room Code:</span>
+            <span className="text-3xl font-mono font-bold tracking-wider">{roomCode}</span>
+            <button
+              onClick={handleCopyCode}
+              className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
+            >
+              {copied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5" />}
+            </button>
+          </motion.div>
+        </div>
+        
+        {/* Game Settings */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 mb-6"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Settings className="w-6 h-6" />
+            <h2 className="text-2xl font-bold">Game Settings</h2>
           </div>
           
-          <div className="flex gap-4">
-            {isHost && (
-              <Card className="text-center flex-1">
-                <h3 className="text-xl font-heading font-bold text-white mb-4">Ready to Start?</h3>
-                <p className="text-gray-400 mb-6">Need 4+ players</p>
-                <Button
-                  variant="primary"
-                  size="xl"
-                  icon={Play}
-                  onClick={handleStartGame}
-                  disabled={participants.length < 4 || isLoading}
-                  className="w-full"
-                >
-                  {isLoading ? 'Starting...' : 'Start Game'}
-                </Button>
-              </Card>
-            )}
-            {!isHost && (
-              <Card className="text-center flex-1">
-                <p className="text-gray-400 mb-4">Waiting for host...</p>
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-2 h-2 bg-neon-cyan rounded-full animate-pulse" />
-                  <div className="w-2 h-2 bg-neon-cyan rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-                  <div className="w-2 h-2 bg-neon-cyan rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
-                </div>
-              </Card>
-            )}
-            <Button variant="outline" icon={LogOut} onClick={handleLeaveRoom} className="self-center">
-              Leave
-            </Button>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white/5 p-4 rounded-lg">
+              <p className="text-sm text-gray-300 mb-1">Game Mode</p>
+              <p className="text-xl font-bold text-purple-300">{room.game_mode}</p>
+            </div>
+            
+            <div className="bg-white/5 p-4 rounded-lg">
+              <p className="text-sm text-gray-300 mb-1">Difficulty</p>
+              <p className="text-xl font-bold text-blue-300">{room.difficulty}</p>
+            </div>
+            
+            <div className="bg-white/5 p-4 rounded-lg">
+              <p className="text-sm text-gray-300 mb-1">Word Pack</p>
+              <p className="text-xl font-bold text-pink-300">{room.word_pack}</p>
+            </div>
           </div>
         </motion.div>
+        
+        {/* Players List */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 mb-6"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <Users className="w-6 h-6" />
+              <h2 className="text-2xl font-bold">Players</h2>
+            </div>
+            <span className="text-xl font-bold">
+              {participants.length}/{room.max_players}
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <AnimatePresence>
+              {participants.map((participant, index) => (
+                <motion.div
+                  key={participant.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ delay: index * 0.05 }}
+                  className={`p-4 rounded-lg border-2 ${
+                    participant.user_id === room.host_id
+                      ? 'bg-yellow-500/20 border-yellow-500'
+                      : participant.user_id === myUserId
+                      ? 'bg-green-500/20 border-green-500'
+                      : 'bg-white/5 border-white/10'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+                        <User className="w-6 h-6" />
+                      </div>
+                      <span className="font-bold text-lg">{participant.username}</span>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      {participant.user_id === room.host_id && (
+                        <div className="bg-yellow-500 px-2 py-1 rounded flex items-center gap-1">
+                          <Crown className="w-4 h-4" />
+                          <span className="text-xs font-bold">Host</span>
+                        </div>
+                      )}
+                      {participant.user_id === myUserId && (
+                        <div className="bg-green-500 px-2 py-1 rounded">
+                          <span className="text-xs font-bold">You</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+          
+          {participants.length < 3 && (
+            <div className="mt-4 bg-yellow-500/20 border border-yellow-500 p-4 rounded-lg">
+              <p className="text-yellow-200 text-center">
+                ⚠️ Need at least 3 players to start the game
+              </p>
+            </div>
+          )}
+        </motion.div>
+        
+        {/* Action Buttons */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="flex flex-col sm:flex-row gap-4"
+        >
+          <button
+            onClick={handleLeave}
+            className="flex-1 flex items-center justify-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 px-6 py-4 rounded-xl font-bold text-lg hover:bg-white/20 transition-all"
+          >
+            <LogOut className="w-6 h-6" />
+            Leave Lobby
+          </button>
+          
+          {isHost && (
+            <button
+              onClick={handleStartGame}
+              disabled={participants.length < 3}
+              className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 px-6 py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              <Play className="w-6 h-6" />
+              Start Game
+            </button>
+          )}
+        </motion.div>
+        
+        {!isHost && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="mt-4 text-center text-gray-300"
+          >
+            <p>Waiting for host to start the game...</p>
+          </motion.div>
+        )}
       </div>
-    </PageContainer>
+    </div>
   )
 }
 
