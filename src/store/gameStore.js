@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { supabase, gameHelpers, realtimeHelpers } from '../lib/supabase'
-import { createBotSquad, BotManager } from '../lib/aiBot'
 
 // Game phases with durations (in seconds)
 export const GAME_PHASES = {
@@ -39,12 +38,6 @@ const useGameStore = create((set, get) => ({
   showResults: false,
   gameResults: null,
 
-  // TEST MODE
-  isTestMode: false,
-  bots: [],
-  botManager: null,
-  botSecrets: {},
-
   // ==========================================
   // INITIALIZATION
   // ==========================================
@@ -57,148 +50,8 @@ const useGameStore = create((set, get) => ({
     localStorage.setItem('guestUsername', guestUsername)
     
     set({ myUserId: guestId, myUsername: guestUsername })
+    console.log('👤 Guest initialized:', guestUsername, `(${guestId.slice(0, 20)}...)`)
     return { guestId, guestUsername }
-  },
-
-  // ==========================================
-  // TEST MODE
-  // ==========================================
-
-  startTestMode: async () => {
-    console.log('🤖 Starting test mode...')
-    set({ isLoading: true, error: null, isTestMode: true })
-    
-    try {
-      const { guestId, guestUsername } = get().initializeGuest()
-      console.log(`👤 You: ${guestUsername} (${guestId})`)
-      
-      // Create bots
-      const bots = createBotSquad()
-      const botManager = new BotManager(bots)
-      console.log(`🤖 Created ${bots.length} AI bots`)
-      
-      // Create mock room
-      const mockRoom = {
-        id: `test_room_${Date.now()}`,
-        room_code: 'TEST00',
-        host_id: guestId,
-        status: 'LOBBY',
-        game_mode: 'SILENT',
-        difficulty: 'MEDIUM',
-        word_pack: 'GENERAL',
-        max_players: 8,
-        created_at: new Date().toISOString()
-      }
-
-      // Create mock participants (you + 4 bots)
-      const mockParticipants = [
-        {
-          id: `p_${guestId}`,
-          room_id: mockRoom.id,
-          user_id: guestId,
-          username: guestUsername,
-          is_alive: true,
-          joined_at: new Date().toISOString()
-        },
-        ...bots.map(bot => ({
-          id: `p_${bot.id}`,
-          room_id: mockRoom.id,
-          user_id: bot.id,
-          username: bot.name,
-          is_alive: true,
-          joined_at: new Date().toISOString()
-        }))
-      ]
-
-      console.log(`✅ Created ${mockParticipants.length} participants:`, 
-        mockParticipants.map(p => p.username))
-
-      // Set all state at once
-      set({
-        room: mockRoom,
-        roomId: mockRoom.id,
-        participants: mockParticipants,
-        bots,
-        botManager,
-        isHost: true,
-        isLoading: false,
-        isConnected: true // Important: mark as connected immediately
-      })
-
-      console.log('🎮 Test mode initialized successfully!')
-      return mockRoom
-      
-    } catch (error) {
-      console.error('❌ Error starting test mode:', error)
-      set({ error: error.message, isLoading: false })
-      throw error
-    }
-  },
-
-  startTestGame: async () => {
-    console.log('🎮 Starting test game...')
-    set({ isLoading: true })
-    
-    try {
-      const { participants, myUserId, bots } = get()
-      
-      if (participants.length === 0) {
-        throw new Error('No participants found!')
-      }
-
-      // Randomly select traitor
-      const allPlayers = participants
-      const traitorIndex = Math.floor(Math.random() * allPlayers.length)
-      const traitorId = allPlayers[traitorIndex].user_id
-
-      console.log(`🎲 Selecting traitor: ${traitorIndex + 1}/${allPlayers.length}`)
-      console.log(`🕵️ Traitor: ${allPlayers[traitorIndex].username} (${traitorId})`)
-
-      // Mock word pairs
-      const wordPair = {
-        main_word: 'Ocean',
-        traitor_word: 'Sea'
-      }
-
-      // Assign roles
-      const myRole = traitorId === myUserId ? 'TRAITOR' : 'CITIZEN'
-      const myWord = traitorId === myUserId ? wordPair.traitor_word : wordPair.main_word
-
-      console.log(`👤 Your role: ${myRole}`)
-      console.log(`📝 Your word: "${myWord}"`)
-
-      // Store bot secrets
-      const botSecrets = {}
-      bots.forEach(bot => {
-        const isBotTraitor = traitorId === bot.id
-        botSecrets[bot.id] = {
-          role: isBotTraitor ? 'TRAITOR' : 'CITIZEN',
-          secret_word: isBotTraitor ? wordPair.traitor_word : wordPair.main_word
-        }
-        bot.role = botSecrets[bot.id].role
-        bot.secretWord = botSecrets[bot.id].secret_word
-      })
-
-      // Update room status
-      const { room } = get()
-      set({ 
-        room: { ...room, status: 'PLAYING' },
-        mySecret: { role: myRole, secret_word: myWord },
-        gamePhase: 'WHISPER',
-        botSecrets,
-        isLoading: false
-      })
-
-      console.log('✅ Test game started! Beginning WHISPER phase...')
-
-      // Start phase timer
-      get().startPhaseTimer('WHISPER')
-      
-    } catch (error) {
-      console.error('❌ Error starting test game:', error)
-      set({ error: error.message, isLoading: false })
-      throw error
-    }
   },
 
   // ==========================================
@@ -206,12 +59,14 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   createRoom: async (gameMode, difficulty, wordPack) => {
+    console.log('🏠 Creating room...')
     set({ isLoading: true, error: null })
     
     try {
       const { guestId, guestUsername } = get().initializeGuest()
       
       const room = await gameHelpers.createRoom(guestId, guestUsername, gameMode, difficulty, wordPack)
+      console.log('✅ Room created:', room.room_code)
       
       set({ 
         room, 
@@ -225,18 +80,21 @@ const useGameStore = create((set, get) => ({
       
       return room
     } catch (error) {
+      console.error('❌ Error creating room:', error)
       set({ error: error.message, isLoading: false })
       throw error
     }
   },
 
   joinRoom: async (roomCode) => {
+    console.log('🚪 Joining room:', roomCode)
     set({ isLoading: true, error: null })
     
     try {
       const { guestId, guestUsername } = get().initializeGuest()
       
       const { room } = await gameHelpers.joinRoom(roomCode, guestId, guestUsername)
+      console.log('✅ Joined room:', room.room_code)
       
       set({ 
         room, 
@@ -250,19 +108,25 @@ const useGameStore = create((set, get) => ({
       
       return room
     } catch (error) {
+      console.error('❌ Error joining room:', error)
       set({ error: error.message, isLoading: false })
       throw error
     }
   },
 
   loadRoom: async (roomId) => {
+    console.log('📥 Loading room:', roomId)
     set({ isLoading: true, error: null })
     
     try {
       const { guestId } = get().initializeGuest()
       
       const room = await gameHelpers.getRoom(roomId)
+      console.log('🎮 Room loaded:', room.room_code, 'Status:', room.status)
+      
       const participants = await gameHelpers.getParticipants(roomId)
+      console.log('👥 Participants loaded:', participants.length, 'players')
+      console.log('Players:', participants.map(p => p.username))
       
       set({ 
         room, 
@@ -277,21 +141,24 @@ const useGameStore = create((set, get) => ({
       
       return room
     } catch (error) {
+      console.error('❌ Error loading room:', error)
       set({ error: error.message, isLoading: false })
       throw error
     }
   },
 
   leaveRoom: async () => {
-    const { roomId, myUserId, realtimeChannel, isTestMode } = get()
+    const { roomId, myUserId, realtimeChannel } = get()
+    console.log('👋 Leaving room...')
     
     try {
-      if (!isTestMode && roomId && myUserId) {
+      if (roomId && myUserId) {
         await gameHelpers.leaveRoom(roomId, myUserId)
       }
       
       // Unsubscribe from real-time
       if (realtimeChannel) {
+        console.log('🔌 Unsubscribing from real-time')
         realtimeHelpers.unsubscribe(realtimeChannel)
       }
       
@@ -317,14 +184,11 @@ const useGameStore = create((set, get) => ({
         realtimeChannel: null,
         isConnected: false,
         showResults: false,
-        gameResults: null,
-        isTestMode: false,
-        bots: [],
-        botManager: null,
-        botSecrets: {}
+        gameResults: null
       })
+      console.log('✅ Room left successfully')
     } catch (error) {
-      console.error('Error leaving room:', error)
+      console.error('❌ Error leaving room:', error)
     }
   },
 
@@ -333,31 +197,31 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   startGame: async () => {
-    const { isTestMode } = get()
-    
-    if (isTestMode) {
-      return get().startTestGame()
-    }
-
+    console.log('🚀 Starting game...')
     set({ isLoading: true, error: null })
     
     try {
       const { roomId, participants } = get()
       
-      if (participants.length < 3) {
-        throw new Error('Need at least 3 players to start')
+      if (participants.length < 2) {
+        throw new Error('Need at least 2 players to start')
       }
+      
+      console.log('🎲 Starting game with', participants.length, 'players')
       
       // Update room status
       await gameHelpers.startGame(roomId)
+      console.log('✅ Room status updated to PLAYING')
       
       // Assign roles and words
       const { room } = get()
       await gameHelpers.assignRoles(roomId, participants, room.difficulty, room.word_pack)
+      console.log('✅ Roles assigned')
       
       // Load my secret
       const { myUserId } = get()
       const mySecret = await gameHelpers.getMySecret(roomId, myUserId)
+      console.log('📝 My role:', mySecret.role, '| Word:', mySecret.secret_word)
       
       set({ 
         mySecret,
@@ -369,6 +233,7 @@ const useGameStore = create((set, get) => ({
       get().startPhaseTimer('WHISPER')
       
     } catch (error) {
+      console.error('❌ Error starting game:', error)
       set({ error: error.message, isLoading: false })
       throw error
     }
@@ -401,30 +266,14 @@ const useGameStore = create((set, get) => ({
     }, 1000)
     
     set({ phaseInterval: interval })
-
-    // Trigger bot actions for test mode
-    const { isTestMode, botManager } = get()
-    if (isTestMode && botManager) {
-      const gameState = {
-        roomId: get().roomId,
-        hints: get().hints,
-        votes: get().votes,
-        participants: get().participants,
-        botSecrets: get().botSecrets
-      }
-      botManager.handlePhase(phaseName, gameState, {
-        submitHint: get().submitTestHint,
-        submitVote: get().submitTestVote
-      })
-    }
   },
 
   advancePhase: async () => {
-    const { gamePhase, roomId, isTestMode } = get()
+    const { gamePhase, roomId } = get()
     const currentPhase = GAME_PHASES[gamePhase]
     
     if (!currentPhase?.next) {
-      // Game round complete, check win conditions
+      console.log('🏁 Round complete, checking win conditions...')
       await get().checkWinConditions()
       return
     }
@@ -434,9 +283,9 @@ const useGameStore = create((set, get) => ({
     
     // Load data for new phase
     if (currentPhase.next === 'DEBATE') {
-      if (!isTestMode) await get().loadHints()
+      await get().loadHints()
     } else if (currentPhase.next === 'REVEAL') {
-      if (!isTestMode) await get().loadVotes()
+      await get().loadVotes()
     }
     
     // Start timer for next phase
@@ -456,32 +305,18 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   submitHint: async (hintText) => {
-    const { roomId, myUserId, isTestMode } = get()
-    
-    if (isTestMode) {
-      return get().submitTestHint(roomId, myUserId, hintText)
-    }
+    const { roomId, myUserId } = get()
+    console.log('💬 Submitting hint:', hintText)
     
     try {
       await gameHelpers.submitHint(roomId, myUserId, hintText)
       await get().loadHints()
+      console.log('✅ Hint submitted')
     } catch (error) {
+      console.error('❌ Error submitting hint:', error)
       set({ error: error.message })
       throw error
     }
-  },
-
-  submitTestHint: async (roomId, userId, hintText) => {
-    const { hints } = get()
-    const newHint = {
-      id: `hint_${Date.now()}_${Math.random()}`,
-      room_id: roomId,
-      user_id: userId,
-      hint_text: hintText,
-      submitted_at: new Date().toISOString()
-    }
-    set({ hints: [...hints, newHint] })
-    return newHint
   },
 
   loadHints: async () => {
@@ -489,9 +324,10 @@ const useGameStore = create((set, get) => ({
     
     try {
       const hints = await gameHelpers.getHints(roomId)
+      console.log('💬 Loaded', hints.length, 'hints')
       set({ hints })
     } catch (error) {
-      console.error('Error loading hints:', error)
+      console.error('❌ Error loading hints:', error)
     }
   },
 
@@ -500,32 +336,18 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   submitVote: async (targetId) => {
-    const { roomId, myUserId, isTestMode } = get()
-    
-    if (isTestMode) {
-      return get().submitTestVote(roomId, myUserId, targetId)
-    }
+    const { roomId, myUserId } = get()
+    console.log('🗳️ Submitting vote for:', targetId)
     
     try {
       await gameHelpers.submitVote(roomId, myUserId, targetId)
       await get().loadVotes()
+      console.log('✅ Vote submitted')
     } catch (error) {
+      console.error('❌ Error submitting vote:', error)
       set({ error: error.message })
       throw error
     }
-  },
-
-  submitTestVote: async (roomId, voterId, targetId) => {
-    const { votes } = get()
-    const newVote = {
-      id: `vote_${Date.now()}_${Math.random()}`,
-      room_id: roomId,
-      voter_id: voterId,
-      target_id: targetId,
-      voted_at: new Date().toISOString()
-    }
-    set({ votes: [...votes, newVote] })
-    return newVote
   },
 
   loadVotes: async () => {
@@ -533,9 +355,10 @@ const useGameStore = create((set, get) => ({
     
     try {
       const votes = await gameHelpers.getVotes(roomId)
+      console.log('🗳️ Loaded', votes.length, 'votes')
       set({ votes })
     } catch (error) {
-      console.error('Error loading votes:', error)
+      console.error('❌ Error loading votes:', error)
     }
   },
 
@@ -544,95 +367,40 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   checkWinConditions: async () => {
-    const { roomId, isTestMode, participants, botSecrets, mySecret } = get()
+    const { roomId, participants } = get()
+    console.log('🎯 Checking win conditions...')
     
     try {
-      let eliminatedId, voteCounts
+      const results = await gameHelpers.calculateVoteResults(roomId)
+      const { eliminatedId, voteCounts } = results
 
-      if (isTestMode) {
-        // Calculate votes locally
-        const { votes } = get()
-        voteCounts = {}
-        votes.forEach(vote => {
-          voteCounts[vote.target_id] = (voteCounts[vote.target_id] || 0) + 1
-        })
-        
-        let maxVotes = 0
-        Object.entries(voteCounts).forEach(([id, count]) => {
-          if (count > maxVotes) {
-            maxVotes = count
-            eliminatedId = id
-          }
-        })
-
-        console.log('📊 Vote counts:', voteCounts)
-        console.log('💀 Eliminated:', participants.find(p => p.user_id === eliminatedId)?.username)
-      } else {
-        const results = await gameHelpers.calculateVoteResults(roomId)
-        eliminatedId = results.eliminatedId
-        voteCounts = results.voteCounts
-      }
+      console.log('📊 Vote counts:', voteCounts)
       
       if (eliminatedId) {
+        const eliminatedPlayer = participants.find(p => p.user_id === eliminatedId)
+        console.log('💀 Eliminated:', eliminatedPlayer?.username)
+        
         // Eliminate player
         const updatedParticipants = participants.map(p => 
           p.user_id === eliminatedId ? { ...p, is_alive: false } : p
         )
         set({ participants: updatedParticipants })
         
-        if (!isTestMode) {
-          await gameHelpers.eliminatePlayer(roomId, eliminatedId)
-        }
+        await gameHelpers.eliminatePlayer(roomId, eliminatedId)
         
         // Add to eliminated list
         const { eliminated } = get()
         set({ eliminated: [...eliminated, eliminatedId] })
       }
-      
+
       // Check if game should end
-      const alive = participants.filter(p => p.is_alive && p.user_id !== eliminatedId)
+      const gameEnd = await gameHelpers.checkGameEnd(roomId)
       
-      // Find traitor
-      let traitorId
-      if (isTestMode) {
-        traitorId = mySecret?.role === 'TRAITOR' ? get().myUserId : 
-                   Object.entries(botSecrets).find(([id, secret]) => secret.role === 'TRAITOR')?.[0]
-      } else {
-        const gameEnd = await gameHelpers.checkGameEnd(roomId)
-        if (gameEnd.ended) {
-          const results = { ...gameEnd, voteCounts }
-          set({ showResults: true, gameResults: results })
-          
-          const { phaseInterval } = get()
-          if (phaseInterval) clearInterval(phaseInterval)
-          return
-        }
-      }
-
-      const isTraitorAlive = alive.some(p => p.user_id === traitorId)
-      
-      console.log(`👥 Alive: ${alive.length}/${participants.length}`)
-      console.log(`🕵️ Traitor alive: ${isTraitorAlive}`)
-
-      // Citizens win if traitor eliminated
-      if (!isTraitorAlive) {
-        console.log('🏆 Citizens win! Traitor was eliminated!')
-        set({ 
-          showResults: true,
-          gameResults: { winner: 'CITIZENS', traitorId, voteCounts }
-        })
-        const { phaseInterval } = get()
-        if (phaseInterval) clearInterval(phaseInterval)
-        return
-      }
-      
-      // Traitor wins if only 2 players left
-      if (alive.length <= 2) {
-        console.log('🏆 Traitor wins! Only 2 players remain!')
-        set({ 
-          showResults: true,
-          gameResults: { winner: 'TRAITOR', traitorId, voteCounts }
-        })
+      if (gameEnd.ended) {
+        console.log('🏆 Game over! Winner:', gameEnd.winner)
+        const results = { ...gameEnd, voteCounts }
+        set({ showResults: true, gameResults: results })
+        
         const { phaseInterval } = get()
         if (phaseInterval) clearInterval(phaseInterval)
         return
@@ -648,7 +416,7 @@ const useGameStore = create((set, get) => ({
       get().startPhaseTimer('WHISPER')
       
     } catch (error) {
-      console.error('Error checking win conditions:', error)
+      console.error('❌ Error checking win conditions:', error)
       set({ error: error.message })
     }
   },
@@ -658,8 +426,11 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   subscribeToRoom: (roomId) => {
+    console.log('📡 Subscribing to real-time updates for room:', roomId)
+    
     const channel = realtimeHelpers.subscribeToRoom(roomId, {
       onRoomUpdate: (payload) => {
+        console.log('🔄 Room updated:', payload)
         const { room } = get()
         
         if (payload.eventType === 'UPDATE') {
@@ -668,44 +439,54 @@ const useGameStore = create((set, get) => ({
           
           // If game started by host, sync phase
           if (room?.status === 'LOBBY' && updatedRoom.status === 'PLAYING') {
+            console.log('🎮 Game started by host, syncing...')
             get().syncGameStart()
           }
         }
       },
       
       onParticipantUpdate: async (payload) => {
+        console.log('👥 Participants updated')
         const { roomId } = get()
         const participants = await gameHelpers.getParticipants(roomId)
+        console.log('New participants:', participants.map(p => p.username))
         set({ participants })
       },
       
       onHintSubmitted: async (payload) => {
+        console.log('💬 New hint submitted')
         await get().loadHints()
       },
       
       onVoteSubmitted: async (payload) => {
+        console.log('🗳️ New vote submitted')
         await get().loadVotes()
       }
     })
     
     set({ realtimeChannel: channel, isConnected: true })
+    console.log('✅ Real-time subscribed and connected')
   },
 
   syncGameStart: async () => {
     const { roomId, myUserId } = get()
+    console.log('🔄 Syncing game start...')
     
     try {
+      // Load my secret
       const mySecret = await gameHelpers.getMySecret(roomId, myUserId)
+      console.log('📝 Synced - My role:', mySecret.role, '| Word:', mySecret.secret_word)
       
       set({ 
         mySecret,
         gamePhase: 'WHISPER'
       })
       
+      // Start phase timer
       get().startPhaseTimer('WHISPER')
       
     } catch (error) {
-      console.error('Error syncing game start:', error)
+      console.error('❌ Error syncing game start:', error)
     }
   },
 
