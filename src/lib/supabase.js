@@ -76,17 +76,18 @@ export const gameHelpers = {
     
     if (roomError) throw new Error('Room not found or already started')
     
-    // Check if already joined
-    const { data: existing } = await supabase
+    // Check if already joined - FIXED: removed .single()
+    const { data: existing, error: existingError } = await supabase
       .from('room_participants')
       .select('user_id')
       .eq('room_id', room.id)
       .eq('user_id', guestId)
-      .single()
     
-    if (existing) {
+    if (existingError) throw existingError
+    
+    if (Array.isArray(existing) && existing.length > 0) {
       console.log('Already in room, skipping join')
-      return { room }
+      return { room, participant: existing[0] }
     }
     
     // Check player count
@@ -128,17 +129,18 @@ export const gameHelpers = {
       return null
     }
     
-    // Check if already joined
-    const { data: existing } = await supabase
+    // Check if already joined - FIXED: removed .single()
+    const { data: existing, error: existingError } = await supabase
       .from('room_participants')
       .select('user_id')
       .eq('room_id', roomId)
       .eq('user_id', guestId)
-      .single()
     
-    if (existing) {
+    if (existingError) throw existingError
+    
+    if (Array.isArray(existing) && existing.length > 0) {
       console.log('Already in room')
-      return existing
+      return existing[0]
     }
     
     // Check player count
@@ -251,7 +253,7 @@ export const gameHelpers = {
     return { wordPair, traitorId: participants[traitorIndex].user_id }
   },
 
-  // Get my secret word
+  // Get my secret word - FIXED: handle 0 rows
   getMySecret: async (roomId, userId) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -260,10 +262,15 @@ export const gameHelpers = {
       .select('role, secret_word')
       .eq('room_id', roomId)
       .eq('user_id', userId)
-      .single()
     
     if (error) throw error
-    return data
+    
+    const row = data?.[0] ?? null
+    if (!row) {
+      console.log('No secret yet for this player')
+      return null
+    }
+    return row
   },
 
   // Submit hint
