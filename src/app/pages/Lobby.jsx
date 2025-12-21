@@ -1,16 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
 import { Copy, Check, Users, Settings } from 'lucide-react'
 
 const Lobby = () => {
   const params = useParams()
-  const location = useLocation()
   const navigate = useNavigate()
   
   // Extract roomId from params OR pathname
-  const roomId = params.roomId || params.roomCode || location.pathname.split('/')[2]
+  const roomId = params.roomId || params.roomCode || window.location.pathname.split('/')[2]
   
   const { 
     room, 
@@ -27,8 +26,6 @@ const Lobby = () => {
 
   const [copied, setCopied] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
-  const loadedRef = useRef(false)
-  const isUnmountingRef = useRef(false)
 
   // Load room data ONCE on mount
   useEffect(() => {
@@ -40,15 +37,6 @@ const Lobby = () => {
       return
     }
 
-    if (loadedRef.current) {
-      console.log('⏭️ Already loaded, skipping')
-      return
-    }
-    
-    loadedRef.current = true
-    isUnmountingRef.current = false
-    console.log('📡 Loading room:', roomId)
-    
     loadRoom(roomId)
       .then(() => console.log('✅ Room loaded'))
       .catch(err => {
@@ -57,26 +45,10 @@ const Lobby = () => {
       })
 
     return () => {
-      console.log('👋 Lobby unmounting')
-      isUnmountingRef.current = true
-      
-      // ONLY leave if actually navigating away (not React Strict Mode remount)
-      // Check if room is still in lobby and we're not going to game
-      const isNavigatingToGame = location.pathname.includes('/game')
-      
-      if (room?.status === 'LOBBY' && !isNavigatingToGame) {
-        console.log('🚪 Leaving room (navigating away from lobby)')
-        setTimeout(() => {
-          // Double-check we're still unmounted after delay
-          if (isUnmountingRef.current) {
-            leaveRoom()
-          }
-        }, 100)
-      } else {
-        console.log('⏭️ Not leaving room (going to game or React remount)')
-      }
+      console.log('👋 Lobby unmounting (no auto leave)')
+      // IMPORTANT: no leaveRoom() here at all
     }
-  }, []) // EMPTY ARRAY - run once only!
+  }, []) // keep dependency array empty
 
   // Navigate when game starts
   useEffect(() => {
@@ -240,7 +212,7 @@ const Lobby = () => {
           ) : (
             <div className="flex-1 py-4 bg-gray-700 rounded-xl font-bold text-gray-400 text-lg text-center">⏳ Waiting for host...</div>
           )}
-          <button onClick={handleLeave} className="px-6 py-4 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors">🚪 Leave</button>
+          <button onClick={handleLeave} className="px-6 py-4 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors">🚺 Leave</button>
         </motion.div>
 
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="mt-8 text-center text-gray-400 text-sm">
