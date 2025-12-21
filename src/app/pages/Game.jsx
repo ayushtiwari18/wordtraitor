@@ -24,20 +24,12 @@ const Game = () => {
     getAliveParticipants
   } = useGameStore()
 
-  const loadedRef = useRef(false)
-
   useEffect(() => {
     if (!roomId) {
       navigate('/')
       return
     }
 
-    if (loadedRef.current) {
-      console.log('⏭️ Game already loaded, skipping')
-      return
-    }
-
-    loadedRef.current = true
     console.log('🎮 Loading game room:', roomId)
     
     loadRoom(roomId).catch(err => {
@@ -45,12 +37,10 @@ const Game = () => {
       navigate('/')
     })
 
-    // IMPORTANT: DO NOT call leaveRoom() on unmount!
-    // React Strict Mode will unmount/remount, causing player to be deleted from DB
     return () => {
-      console.log('👋 Game unmounting (React Strict Mode or navigation)')
+      console.log('👋 Game unmounting (no auto leave)')
     }
-  }, [])
+  }, []) // no roomId in deps
 
   // Redirect to results if game ended
   useEffect(() => {
@@ -62,7 +52,7 @@ const Game = () => {
 
   const handleLeave = async () => {
     if (confirm('Are you sure you want to leave the game?')) {
-      console.log('🚪 Manually leaving game')
+      console.log('🚺 Manually leaving game')
       const { leaveRoom } = useGameStore.getState()
       await leaveRoom()
       navigate('/')
@@ -154,7 +144,7 @@ const Game = () => {
             onClick={handleLeave}
             className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500 rounded-lg text-red-400 font-semibold transition-colors"
           >
-            🚪 Leave
+            🚺 Leave
           </button>
         </div>
       </div>
