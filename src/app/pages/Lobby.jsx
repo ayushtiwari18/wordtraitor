@@ -23,31 +23,47 @@ const Lobby = () => {
 
   const [copied, setCopied] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
+  const [hasLoaded, setHasLoaded] = useState(false)
 
   // Load room data once on mount
   useEffect(() => {
     console.log('🏠 Lobby mounted with roomId:', roomId)
     
-    if (roomId) {
-      console.log('📡 Loading room data...')
-      loadRoom(roomId)
-        .then(() => {
-          console.log('✅ Room loaded successfully')
-        })
-        .catch(err => {
-          console.error('❌ Error loading room:', err)
-          navigate('/')
-        })
+    // Safety check
+    if (!roomId) {
+      console.error('❌ No roomId provided! Redirecting to home...')
+      navigate('/')
+      return
     }
 
-    // Cleanup on unmount
+    // Prevent duplicate loading
+    if (hasLoaded) {
+      console.log('⏭️ Room already loaded, skipping...')
+      return
+    }
+    
+    console.log('📡 Loading room data for:', roomId)
+    setHasLoaded(true)
+    
+    loadRoom(roomId)
+      .then(() => {
+        console.log('✅ Room loaded successfully')
+      })
+      .catch(err => {
+        console.error('❌ Error loading room:', err)
+        navigate('/')
+      })
+
+    // Cleanup function
     return () => {
       console.log('👋 Lobby unmounting...')
+      // Only leave if still in LOBBY status (not if game started)
       if (room?.status === 'LOBBY') {
+        console.log('🚪 Leaving lobby...')
         leaveRoom()
       }
     }
-  }, [roomId]) // Only re-run if roomId changes
+  }, []) // Empty dependency - only run once on mount
 
   // Navigate to game when started
   useEffect(() => {
@@ -55,7 +71,7 @@ const Lobby = () => {
       console.log('🎮 Game started! Navigating to game page...')
       navigate(`/game/${roomId}`)
     }
-  }, [room?.status, roomId])
+  }, [room?.status])
 
   const handleCopyCode = () => {
     if (room?.room_code) {
@@ -106,6 +122,25 @@ const Lobby = () => {
         <div className="text-center">
           <div className="text-6xl mb-4">❌</div>
           <p className="text-xl text-red-400 mb-4">{error}</p>
+          <button
+            onClick={() => navigate('/')}
+            className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"
+          >
+            Go Home
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Show debug info if no room loaded
+  if (!room && !isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <p className="text-xl text-yellow-400 mb-4">Room not found</p>
+          <p className="text-gray-400 mb-4">Room ID: {roomId || 'undefined'}</p>
           <button
             onClick={() => navigate('/')}
             className="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold"
