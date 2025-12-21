@@ -2,17 +2,18 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
-import { Play, Users, Sparkles } from 'lucide-react'
+import { Play, Users, Sparkles, Bot } from 'lucide-react'
 
 const Home = () => {
   const navigate = useNavigate()
-  const { createRoom, joinRoom, initializeGuest } = useGameStore()
+  const { createRoom, joinRoom, startTestMode } = useGameStore()
 
   const [showJoinModal, setShowJoinModal] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [roomCode, setRoomCode] = useState('')
   const [isJoining, setIsJoining] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [isStartingTest, setIsStartingTest] = useState(false)
   const [error, setError] = useState('')
 
   // Create room settings
@@ -55,6 +56,18 @@ const Home = () => {
     }
   }
 
+  const handleTestMode = async () => {
+    setIsStartingTest(true)
+    try {
+      const room = await startTestMode()
+      navigate(`/lobby/${room.id}`)
+    } catch (err) {
+      alert('Failed to start test mode: ' + err.message)
+    } finally {
+      setIsStartingTest(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center px-4">
       <div className="max-w-4xl w-full">
@@ -89,20 +102,53 @@ const Home = () => {
           </p>
         </motion.div>
 
+        {/* Test Mode Banner */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-6 bg-gradient-to-r from-green-500/20 to-blue-500/20 border-2 border-green-500/50 rounded-xl p-4 text-center"
+        >
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Bot className="w-5 h-5 text-green-400" />
+            <span className="text-green-400 font-bold">NEW: Test Mode Available!</span>
+          </div>
+          <p className="text-sm text-gray-300">
+            Play with 4 AI bots to test the complete game flow
+          </p>
+        </motion.div>
+
         {/* Main Actions */}
-        <div className="grid md:grid-cols-2 gap-6 mb-12">
+        <div className="grid md:grid-cols-3 gap-4 mb-12">
+          {/* Test Mode - HIGHLIGHTED */}
+          <motion.button
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.15 }}
+            onClick={handleTestMode}
+            disabled={isStartingTest}
+            className="group relative bg-gradient-to-br from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-600 disabled:to-gray-700 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-2xl"
+          >
+            <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+            <Bot className="w-10 h-10 mx-auto mb-3" />
+            <h3 className="text-xl font-bold text-white mb-2">
+              {isStartingTest ? 'Starting...' : 'Test Mode'}
+            </h3>
+            <p className="text-green-100 text-sm">Play with AI bots</p>
+          </motion.button>
+
           {/* Create Room */}
           <motion.button
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
             onClick={() => setShowCreateModal(true)}
-            className="group relative bg-gradient-to-br from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl"
+            className="group relative bg-gradient-to-br from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-2xl"
           >
             <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-            <Sparkles className="w-12 h-12 mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-white mb-2">Create Room</h3>
-            <p className="text-purple-100">Start a new game with friends</p>
+            <Sparkles className="w-10 h-10 mx-auto mb-3" />
+            <h3 className="text-xl font-bold text-white mb-2">Create Room</h3>
+            <p className="text-purple-100 text-sm">Start a new game</p>
           </motion.button>
 
           {/* Join Room */}
@@ -111,12 +157,12 @@ const Home = () => {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
             onClick={() => setShowJoinModal(true)}
-            className="group relative bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl"
+            className="group relative bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-2xl"
           >
             <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-            <Users className="w-12 h-12 mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-white mb-2">Join Room</h3>
-            <p className="text-blue-100">Enter a room code to join</p>
+            <Users className="w-10 h-10 mx-auto mb-3" />
+            <h3 className="text-xl font-bold text-white mb-2">Join Room</h3>
+            <p className="text-blue-100 text-sm">Enter room code</p>
           </motion.button>
         </div>
 
