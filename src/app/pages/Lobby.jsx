@@ -27,7 +27,8 @@ const Lobby = () => {
 
   const [copied, setCopied] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
-  const loadedRef = useRef(false) // Prevent duplicate loading
+  const loadedRef = useRef(false)
+  const isUnmountingRef = useRef(false)
 
   // Load room data ONCE on mount
   useEffect(() => {
@@ -45,6 +46,7 @@ const Lobby = () => {
     }
     
     loadedRef.current = true
+    isUnmountingRef.current = false
     console.log('📡 Loading room:', roomId)
     
     loadRoom(roomId)
@@ -56,8 +58,22 @@ const Lobby = () => {
 
     return () => {
       console.log('👋 Lobby unmounting')
-      if (room?.status === 'LOBBY') {
-        leaveRoom()
+      isUnmountingRef.current = true
+      
+      // ONLY leave if actually navigating away (not React Strict Mode remount)
+      // Check if room is still in lobby and we're not going to game
+      const isNavigatingToGame = location.pathname.includes('/game')
+      
+      if (room?.status === 'LOBBY' && !isNavigatingToGame) {
+        console.log('🚪 Leaving room (navigating away from lobby)')
+        setTimeout(() => {
+          // Double-check we're still unmounted after delay
+          if (isUnmountingRef.current) {
+            leaveRoom()
+          }
+        }, 100)
+      } else {
+        console.log('⏭️ Not leaving room (going to game or React remount)')
       }
     }
   }, []) // EMPTY ARRAY - run once only!
@@ -190,7 +206,7 @@ const Lobby = () => {
           
           <div className="space-y-3">
             <AnimatePresence>
-              {participants.map((player, index) => (
+              {participants.filter(p => p && p.user_id).map((player, index) => (
                 <motion.div key={player.user_id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ delay: index * 0.1 }} className={`p-4 rounded-lg border-2 flex items-center justify-between ${
                     player.user_id === myUserId ? 'bg-purple-500/10 border-purple-500' : 'bg-gray-900 border-gray-700'}`}>
                   <div className="flex items-center gap-3">
