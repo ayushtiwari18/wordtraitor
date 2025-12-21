@@ -39,10 +39,18 @@ const useGameStore = create((set, get) => ({
   gameResults: null,
 
   // ==========================================
-  // INITIALIZATION
+  // INITIALIZATION - CALL ONCE ON APP START
   // ==========================================
   
   initializeGuest: () => {
+    // Check if already initialized
+    const { myUserId, myUsername } = get()
+    if (myUserId && myUsername) {
+      console.log('✅ Guest already initialized:', myUsername, `(${myUserId.slice(0, 20)}...)`)
+      return { guestId: myUserId, guestUsername: myUsername }
+    }
+
+    // Get from localStorage or generate new
     const guestId = localStorage.getItem('guestId') || `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const guestUsername = localStorage.getItem('guestUsername') || `Player${Math.floor(Math.random() * 9999)}`
     
@@ -68,9 +76,14 @@ const useGameStore = create((set, get) => ({
       const room = await gameHelpers.createRoom(guestId, guestUsername, gameMode, difficulty, wordPack)
       console.log('✅ Room created:', room.room_code)
       
+      // Fetch participants immediately after creation
+      const participants = await gameHelpers.getParticipants(room.id)
+      console.log('👥 Initial participants:', participants.length)
+      
       set({ 
         room, 
         roomId: room.id,
+        participants,
         isHost: true,
         isLoading: false
       })
@@ -93,12 +106,18 @@ const useGameStore = create((set, get) => ({
     try {
       const { guestId, guestUsername } = get().initializeGuest()
       
-      const { room } = await gameHelpers.joinRoom(roomCode, guestId, guestUsername)
-      console.log('✅ Joined room:', room.room_code)
+      const result = await gameHelpers.joinRoom(roomCode, guestId, guestUsername)
+      console.log('✅ Joined room:', result.room.room_code)
+      
+      // Fetch full room details
+      const room = await gameHelpers.getRoom(result.room.id)
+      const participants = await gameHelpers.getParticipants(result.room.id)
+      console.log('👥 Participants after join:', participants.length)
       
       set({ 
         room, 
         roomId: room.id,
+        participants,
         isHost: false,
         isLoading: false
       })
@@ -119,6 +138,7 @@ const useGameStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
+      // Initialize guest WITHOUT creating new ID
       const { guestId } = get().initializeGuest()
       
       const room = await gameHelpers.getRoom(roomId)
@@ -128,10 +148,25 @@ const useGameStore = create((set, get) => ({
       console.log('👥 Participants loaded:', participants.length, 'players')
       console.log('Players:', participants.map(p => p.username))
       
+      // Check if I'm already in the room
+      const alreadyJoined = participants.some(p => p.user_id === guestId)
+      
+      if (!alreadyJoined && room.status === 'LOBBY') {
+        console.log('🆕 Not in room, auto-joining...')
+        // Auto-join if not already in room
+        const { guestUsername } = get()
+        await gameHelpers.autoJoinRoom(roomId, guestId, guestUsername)
+        // Reload participants
+        const updatedParticipants = await gameHelpers.getParticipants(roomId)
+        console.log('👥 After auto-join:', updatedParticipants.length)
+        set({ participants: updatedParticipants })
+      } else {
+        set({ participants })
+      }
+      
       set({ 
         room, 
         roomId,
-        participants,
         isHost: room.host_id === guestId,
         isLoading: false
       })
@@ -168,7 +203,8 @@ const useGameStore = create((set, get) => ({
         clearInterval(phaseInterval)
       }
       
-      // Reset store
+      // Reset store (but keep guest ID!)
+      const { myUserId: guestId, myUsername: guestUsername } = get()
       set({
         room: null,
         roomId: null,
@@ -184,7 +220,10 @@ const useGameStore = create((set, get) => ({
         realtimeChannel: null,
         isConnected: false,
         showResults: false,
-        gameResults: null
+        gameResults: null,
+        // KEEP GUEST ID
+        myUserId: guestId,
+        myUsername: guestUsername
       })
       console.log('✅ Room left successfully')
     } catch (error) {
