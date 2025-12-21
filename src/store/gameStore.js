@@ -1,357 +1,203 @@
 import { create } from 'zustand'
-import { supabase, gameHelpers, realtimeHelpers } from '@/lib/supabase'
-import { GAME_PHASES, GAME_STATUS } from '@/lib/constants'
+import { getRandomWordPair } from '@/lib/wordPacks'
+
+export const GAME_PHASES = {
+  WHISPER: 'whisper',
+  HINT_DROP: 'hint_drop',
+  DEBATE: 'debate',
+  VERDICT: 'verdict',
+  REVEAL: 'reveal'
+}
+
+export const PHASE_DURATIONS = {
+  [GAME_PHASES.WHISPER]: 15,
+  [GAME_PHASES.HINT_DROP]: 30,
+  [GAME_PHASES.DEBATE]: 120,
+  [GAME_PHASES.VERDICT]: 20,
+  [GAME_PHASES.REVEAL]: 10
+}
 
 export const useGameStore = create((set, get) => ({
-  // Room data
-  room: null,
-  participants: [],
-  mySecret: null,
+  // Room state
+  roomCode: null,
+  gameSettings: null,
   
-  // Game state
+  // Round state
   currentPhase: null,
-  currentRound: 1,
-  timeRemaining: 0,
+  phaseTimeLeft: 0,
+  roundNumber: 1,
+  
+  // Player state
+  players: [],
+  myRole: null, // 'keeper' or 'traitor'
+  myWord: null,
+  traitorId: null,
   
   // Game data
   hints: [],
   votes: [],
-  voteResults: null,
+  eliminatedPlayers: [],
   
-  // UI state
-  loading: false,
-  error: null,
+  // Results
+  winner: null,
+  gameOver: false,
   
-  // Real-time channel
-  channel: null,
-
-  // Create new room
-  createRoom: async (userId, gameMode, difficulty, wordPack) => {
-    try {
-      set({ loading: true, error: null })
-      
-      const data = await gameHelpers.createRoom(userId, gameMode, difficulty, wordPack)
-      
-      // Fetch room details
-      const { data: room, error: roomError } = await supabase
-        .from('game_rooms')
-        .select('*')
-        .eq('id', data.room_id)
-        .single()
-      
-      if (roomError) throw roomError
-      
-      set({ 
-        room,
-        loading: false 
-      })
-      
-      // Subscribe to real-time updates
-      get().subscribeToRoom(data.room_id)
-      
-      return { success: true, roomId: data.room_id, roomCode: data.room_code }
-    } catch (error) {
-      console.error('Create room error:', error)
-      set({ 
-        error: error.message, 
-        loading: false 
-      })
-      return { success: false, error: error.message }
-    }
-  },
-
-  // Join existing room
-  joinRoom: async (roomCode, userId) => {
-    try {
-      set({ loading: true, error: null })
-      
-      const data = await gameHelpers.joinRoom(roomCode, userId)
-      
-      // Fetch room details
-      const { data: room, error: roomError } = await supabase
-        .from('game_rooms')
-        .select('*')
-        .eq('id', data.room_id)
-        .single()
-      
-      if (roomError) throw roomError
-      
-      set({ 
-        room,
-        loading: false 
-      })
-      
-      // Subscribe to real-time updates
-      get().subscribeToRoom(data.room_id)
-      
-      return { success: true, roomId: data.room_id }
-    } catch (error) {
-      console.error('Join room error:', error)
-      set({ 
-        error: error.message, 
-        loading: false 
-      })
-      return { success: false, error: error.message }
-    }
-  },
-
-  // Load room by ID
-  loadRoom: async (roomId) => {
-    try {
-      set({ loading: true, error: null })
-      
-      // Fetch room
-      const { data: room, error: roomError } = await supabase
-        .from('game_rooms')
-        .select('*')
-        .eq('id', roomId)
-        .single()
-      
-      if (roomError) throw roomError
-      
-      // Fetch participants with profiles
-      const { data: participants, error: participantsError } = await supabase
-        .from('room_participants')
-        .select(`
-          *,
-          profile:profiles(*)
-        `)
-        .eq('room_id', roomId)
-      
-      if (participantsError) throw participantsError
-      
-      set({ 
-        room,
-        participants,
-        loading: false 
-      })
-      
-      // Subscribe to real-time updates
-      get().subscribeToRoom(roomId)
-      
-      return { success: true }
-    } catch (error) {
-      console.error('Load room error:', error)
-      set({ 
-        error: error.message, 
-        loading: false 
-      })
-      return { success: false, error: error.message }
-    }
-  },
-
-  // Start new round
-  startRound: async (userId) => {
-    try {
-      const { room } = get()
-      if (!room) throw new Error('No active room')
-      if (room.host_id !== userId) throw new Error('Only host can start game')
-      
-      set({ loading: true, error: null })
-      
-      const roundNumber = room.current_round || 1
-      const data = await gameHelpers.startRound(room.id, roundNumber)
-      
-      // Fetch my secret
-      const secret = await gameHelpers.getMySecret(room.id, userId, roundNumber)
-      
-      set({ 
-        mySecret: secret,
-        currentRound: roundNumber,
-        currentPhase: GAME_PHASES.WHISPER,
-        loading: false 
-      })
-      
-      return { success: true, data }
-    } catch (error) {
-      console.error('Start round error:', error)
-      set({ 
-        error: error.message, 
-        loading: false 
-      })
-      return { success: false, error: error.message }
-    }
-  },
-
-  // Submit hint
-  submitHint: async (userId, hintText) => {
-    try {
-      const { room, currentRound } = get()
-      if (!room) throw new Error('No active room')
-      
-      const data = await gameHelpers.submitHint(room.id, userId, currentRound, hintText)
-      
-      return { success: true }
-    } catch (error) {
-      console.error('Submit hint error:', error)
-      return { success: false, error: error.message }
-    }
-  },
-
-  // Submit vote
-  submitVote: async (userId, targetId) => {
-    try {
-      const { room, currentRound } = get()
-      if (!room) throw new Error('No active room')
-      
-      const data = await gameHelpers.submitVote(room.id, userId, targetId, currentRound)
-      
-      return { success: true }
-    } catch (error) {
-      console.error('Submit vote error:', error)
-      return { success: false, error: error.message }
-    }
-  },
-
-  // Process votes and determine outcome
-  processVotes: async () => {
-    try {
-      const { room, currentRound } = get()
-      if (!room) throw new Error('No active room')
-      
-      const results = await gameHelpers.processVotes(room.id, currentRound)
-      
-      set({ 
-        voteResults: results,
-        currentPhase: GAME_PHASES.REVEAL 
-      })
-      
-      return { success: true, results }
-    } catch (error) {
-      console.error('Process votes error:', error)
-      return { success: false, error: error.message }
-    }
-  },
-
-  // Fetch hints for current round
-  fetchHints: async () => {
-    try {
-      const { room, currentRound } = get()
-      if (!room) return
-      
-      const { data, error } = await supabase
-        .from('game_hints')
-        .select(`
-          *,
-          profile:profiles(*)
-        `)
-        .eq('room_id', room.id)
-        .eq('round_number', currentRound)
-        .order('submitted_at', { ascending: true })
-      
-      if (error) throw error
-      
-      set({ hints: data || [] })
-    } catch (error) {
-      console.error('Fetch hints error:', error)
-    }
-  },
-
-  // Fetch votes for current round
-  fetchVotes: async () => {
-    try {
-      const { room, currentRound } = get()
-      if (!room) return
-      
-      const { data, error } = await supabase
-        .from('game_votes')
-        .select('*')
-        .eq('room_id', room.id)
-        .eq('round_number', currentRound)
-      
-      if (error) throw error
-      
-      set({ votes: data || [] })
-    } catch (error) {
-      console.error('Fetch votes error:', error)
-    }
-  },
-
-  // Set current phase
-  setPhase: (phase) => set({ currentPhase: phase }),
-
-  // Set time remaining
-  setTimeRemaining: (time) => set({ timeRemaining: time }),
-
-  // Subscribe to real-time updates
-  subscribeToRoom: (roomId) => {
-    // Unsubscribe from previous channel
-    const currentChannel = get().channel
-    if (currentChannel) {
-      realtimeHelpers.unsubscribe(currentChannel)
-    }
+  // Actions
+  initializeGame: (roomCode, settings, players, guestId) => {
+    // Pick random traitor
+    const traitorIndex = Math.floor(Math.random() * players.length)
+    const traitorId = players[traitorIndex].id
     
-    // Create new subscription
-    const channel = realtimeHelpers.subscribeToRoom(roomId, {
-      onRoomUpdate: (payload) => {
-        console.log('Room updated:', payload)
-        if (payload.eventType === 'UPDATE') {
-          set({ room: payload.new })
-        }
-      },
-      
-      onParticipantUpdate: (payload) => {
-        console.log('Participant updated:', payload)
-        get().loadParticipants()
-      },
-      
-      onHintSubmitted: (payload) => {
-        console.log('Hint submitted:', payload)
-        get().fetchHints()
-      },
-      
-      onVoteSubmitted: (payload) => {
-        console.log('Vote submitted:', payload)
-        get().fetchVotes()
-      }
-    })
+    // Get word pair
+    const wordPair = getRandomWordPair(settings.wordPack, settings.difficulty)
     
-    set({ channel })
-  },
-
-  // Load participants
-  loadParticipants: async () => {
-    try {
-      const { room } = get()
-      if (!room) return
-      
-      const { data, error } = await supabase
-        .from('room_participants')
-        .select(`
-          *,
-          profile:profiles(*)
-        `)
-        .eq('room_id', room.id)
-      
-      if (error) throw error
-      
-      set({ participants: data || [] })
-    } catch (error) {
-      console.error('Load participants error:', error)
-    }
-  },
-
-  // Leave room and cleanup
-  leaveRoom: () => {
-    const channel = get().channel
-    if (channel) {
-      realtimeHelpers.unsubscribe(channel)
-    }
+    // Determine my role and word
+    const myRole = guestId === traitorId ? 'traitor' : 'keeper'
+    const myWord = myRole === 'traitor' ? wordPair.traitor : wordPair.keeper
     
     set({
-      room: null,
-      participants: [],
-      mySecret: null,
-      currentPhase: null,
-      currentRound: 1,
-      timeRemaining: 0,
+      roomCode,
+      gameSettings: settings,
+      players: players.map(p => ({
+        ...p,
+        isTraitor: p.id === traitorId,
+        word: p.id === traitorId ? wordPair.traitor : wordPair.keeper,
+        isEliminated: false
+      })),
+      myRole,
+      myWord,
+      traitorId,
+      currentPhase: GAME_PHASES.WHISPER,
+      phaseTimeLeft: PHASE_DURATIONS[GAME_PHASES.WHISPER],
+      roundNumber: 1,
       hints: [],
       votes: [],
-      voteResults: null,
-      channel: null
+      eliminatedPlayers: [],
+      winner: null,
+      gameOver: false
     })
   },
-
-  // Clear error
-  clearError: () => set({ error: null })
+  
+  startPhase: (phase) => {
+    set({
+      currentPhase: phase,
+      phaseTimeLeft: PHASE_DURATIONS[phase]
+    })
+  },
+  
+  decrementTimer: () => {
+    const { phaseTimeLeft, currentPhase } = get()
+    if (phaseTimeLeft > 0) {
+      set({ phaseTimeLeft: phaseTimeLeft - 1 })
+    } else {
+      get().advancePhase()
+    }
+  },
+  
+  advancePhase: () => {
+    const { currentPhase, votes, players, eliminatedPlayers } = get()
+    
+    switch (currentPhase) {
+      case GAME_PHASES.WHISPER:
+        get().startPhase(GAME_PHASES.HINT_DROP)
+        break
+      
+      case GAME_PHASES.HINT_DROP:
+        get().startPhase(GAME_PHASES.DEBATE)
+        break
+      
+      case GAME_PHASES.DEBATE:
+        get().startPhase(GAME_PHASES.VERDICT)
+        break
+      
+      case GAME_PHASES.VERDICT:
+        // Calculate votes
+        const voteCounts = {}
+        votes.forEach(vote => {
+          voteCounts[vote.targetId] = (voteCounts[vote.targetId] || 0) + 1
+        })
+        
+        // Find most voted player
+        let mostVoted = null
+        let maxVotes = 0
+        Object.entries(voteCounts).forEach(([playerId, count]) => {
+          if (count > maxVotes) {
+            maxVotes = count
+            mostVoted = playerId
+          }
+        })
+        
+        // Eliminate player
+        if (mostVoted) {
+          const eliminated = players.find(p => p.id === mostVoted)
+          set({
+            eliminatedPlayers: [...eliminatedPlayers, eliminated],
+            players: players.map(p => 
+              p.id === mostVoted ? { ...p, isEliminated: true } : p
+            )
+          })
+          
+          // Check win conditions
+          const traitorEliminated = eliminated?.isTraitor
+          const alivePlayers = players.filter(p => p.id !== mostVoted && !p.isEliminated)
+          
+          if (traitorEliminated) {
+            set({ winner: 'keepers', gameOver: true })
+          } else if (alivePlayers.length <= 2) {
+            set({ winner: 'traitor', gameOver: true })
+          }
+        }
+        
+        get().startPhase(GAME_PHASES.REVEAL)
+        break
+      
+      case GAME_PHASES.REVEAL:
+        const { gameOver } = get()
+        if (!gameOver) {
+          // Start new round
+          set({
+            roundNumber: get().roundNumber + 1,
+            hints: [],
+            votes: []
+          })
+          get().startPhase(GAME_PHASES.HINT_DROP)
+        }
+        break
+    }
+  },
+  
+  submitHint: (playerId, hint) => {
+    const { hints } = get()
+    set({
+      hints: [...hints, { playerId, hint, round: get().roundNumber }]
+    })
+  },
+  
+  submitVote: (voterId, targetId) => {
+    const { votes } = get()
+    // Remove previous vote from this voter
+    const newVotes = votes.filter(v => v.voterId !== voterId)
+    set({
+      votes: [...newVotes, { voterId, targetId }]
+    })
+  },
+  
+  resetGame: () => {
+    set({
+      roomCode: null,
+      gameSettings: null,
+      currentPhase: null,
+      phaseTimeLeft: 0,
+      roundNumber: 1,
+      players: [],
+      myRole: null,
+      myWord: null,
+      traitorId: null,
+      hints: [],
+      votes: [],
+      eliminatedPlayers: [],
+      winner: null,
+      gameOver: false
+    })
+  }
 }))
