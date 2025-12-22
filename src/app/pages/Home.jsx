@@ -118,14 +118,26 @@ const Home = () => {
   }
 
   const handleCreateRoom = async (e) => {
+    console.log('🚨 DEBUG: handleCreateRoom called!')
+    console.log('  Event:', e.type)
+    console.log('  Settings:', { gameMode, difficulty, wordPack, traitorCount })
+    
     e.preventDefault()
     setError('')
     setIsCreating(true)
+    
+    console.log('🚨 DEBUG: After setIsCreating(true)')
+    console.log('  createRoom function:', typeof createRoom)
+    console.log('  isMountedRef.current:', isMountedRef.current)
+    
     let lastError = null
 
     // Retry logic for network failures
     for (let attempt = 1; attempt <= 3; attempt++) {
-      if (!isMountedRef.current) break
+      if (!isMountedRef.current) {
+        console.log('⚠️ Component unmounted, aborting')
+        break
+      }
       
       try {
         const customSettings = {
@@ -139,11 +151,16 @@ const Home = () => {
           }
         }
         
-        console.log(`🏠 Create attempt ${attempt}/3 - Settings:`, { gameMode, difficulty, wordPack })
+        console.log(`🏠 BEFORE createRoom() call - Attempt ${attempt}/3`)
+        console.log('  Parameters:', { gameMode, difficulty, wordPack, customSettings })
+        
         const room = await createRoom(gameMode, difficulty, wordPack, customSettings)
+        
+        console.log('🎉 AFTER createRoom() call - Got result:', room)
         
         // CRITICAL: Validate room object
         if (!room || !room.id || !room.room_code) {
+          console.error('❌ Invalid room object:', room)
           throw new Error('Invalid room data received from server')
         }
         
@@ -181,6 +198,9 @@ const Home = () => {
         
       } catch (err) {
         console.error(`❌ Create attempt ${attempt} failed:`, err)
+        console.error('   Error name:', err.name)
+        console.error('   Error message:', err.message)
+        console.error('   Error stack:', err.stack)
         lastError = err
         
         // Retry on network errors
@@ -197,8 +217,11 @@ const Home = () => {
     }
     
     // Handle error only if component is still mounted
+    console.log('🚨 DEBUG: Reached error handling section')
     if (isMountedRef.current) {
-      setError(lastError?.message || 'Failed to create room')
+      const errorMsg = lastError?.message || 'Failed to create room'
+      console.error('🚫 Setting error:', errorMsg)
+      setError(errorMsg)
       setIsCreating(false)
     }
   }
