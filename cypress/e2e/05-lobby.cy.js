@@ -34,24 +34,19 @@ describe('Phase 2: Lobby & Settings', () => {
       cy.get('[data-testid="create-submit-button"]').click()
       cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
       
-      // Get room code
-      cy.get('[data-testid="room-code"]').invoke('text').then((code) => {
-        const roomCode = code.trim()
-        
-        // Click copy button (find button near room code)
-        cy.get('[data-testid="room-code"]')
-          .parent()
-          .parent()
-          .find('button')
-          .first()
-          .click()
-        
-        // Verify copied message appears
-        cy.contains('Copied', { timeout: 2000 }).should('be.visible')
-        
-        // Verify clipboard (Note: Cypress can't directly read clipboard in headless mode)
-        // So we just verify the UI feedback
-      })
+      // Click copy button (find button near room code)
+      cy.get('[data-testid="room-code"]')
+        .parent()
+        .parent()
+        .find('button')
+        .first()
+        .click()
+      
+      // Verify copied message appears
+      cy.contains('Copied', { timeout: 2000 }).should('be.visible')
+      
+      // Note: Cypress can't directly read clipboard in headless mode
+      // So we just verify the UI feedback
     })
 
     it('TC042: should show host indicator on creator', () => {
