@@ -108,6 +108,12 @@ const useGameStore = create((set, get) => ({
       const room = await gameHelpers.createRoom(guestId, guestUsername, gameMode, difficulty, wordPack, customSettings)
       console.log('✅ Room created:', room.room_code)
       
+      // Validate room object
+      if (!room || !room.id) {
+        console.error('❌ Invalid room object:', room)
+        throw new Error('Room creation returned invalid data')
+      }
+      
       // Fetch participants immediately after creation
       const participants = await gameHelpers.getParticipants(room.id)
       console.log('👥 Initial participants:', participants.length)
@@ -141,13 +147,27 @@ const useGameStore = create((set, get) => ({
       const { guestId, guestUsername } = get().initializeGuest()
       
       const result = await gameHelpers.joinRoom(roomCode, guestId, guestUsername)
-      console.log('✅ Joined room:', result.room.room_code)
+      console.log('✅ Joined room - Result:', result)
+      
+      // CRITICAL: Validate the result has room property
+      if (!result || !result.room || !result.room.id) {
+        console.error('❌ Invalid join result:', result)
+        throw new Error('Join room returned invalid data')
+      }
+      
+      console.log('✅ Room ID from join:', result.room.id)
       
       // Fetch full room details
       const room = await gameHelpers.getRoom(result.room.id)
       const participants = await gameHelpers.getParticipants(result.room.id)
       console.log('👥 Participants after join:', participants.length)
       console.log('⚙️ Room settings:', room.custom_timings, 'traitors:', room.traitor_count)
+      
+      // Validate room object again
+      if (!room || !room.id) {
+        console.error('❌ Invalid room object after fetch:', room)
+        throw new Error('Failed to fetch room details')
+      }
       
       set({ 
         room, 
@@ -162,9 +182,11 @@ const useGameStore = create((set, get) => ({
       // Start real-time subscription
       get().subscribeToRoom(room.id)
       
+      console.log('🎯 Returning room object with id:', room.id)
       return room
     } catch (error) {
       console.error('❌ Error joining room:', error)
+      console.error('❌ Error stack:', error.stack)
       set({ error: error.message, isLoading: false })
       throw error
     }
