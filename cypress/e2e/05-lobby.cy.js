@@ -260,14 +260,14 @@ describe('Phase 2: Lobby & Settings', () => {
       cy.get('[data-testid="create-submit-button"]').click()
       cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
       
-      // Click leave button
-      cy.contains('Leave', { timeout: 5000 }).click()
+      // Click leave button using data-testid
+      cy.get('[data-testid="leave-room-button"]', { timeout: 5000 }).click()
       
-      // Should be back at home
-      cy.url().should('eq', Cypress.config().baseUrl + '/')
+      // Wait for navigation to complete
+      cy.url({ timeout: 10000 }).should('eq', Cypress.config().baseUrl + '/')
       
       // Home page elements visible
-      cy.get('[data-testid="create-room-button"]').should('be.visible')
+      cy.get('[data-testid="create-room-button"]', { timeout: 5000 }).should('be.visible')
       cy.get('[data-testid="join-room-button"]').should('be.visible')
     })
   })
