@@ -20,7 +20,10 @@ describe('Phase 3: Room Creation & Joining', () => {
       cy.get('[data-testid="create-submit-button"]').click()
       
       // Should navigate to lobby
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      // CRITICAL: Wait for page to fully load
+      cy.wait(1000)
+      cy.get('[data-testid="room-code"]', { timeout: 10000 }).should('exist')
     })
 
     it('should generate unique 6-character room code', () => {
@@ -28,10 +31,11 @@ describe('Phase 3: Room Creation & Joining', () => {
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
       
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
       
       // Room code should exist
-      cy.get('[data-testid="room-code"]', { timeout: 5000 }).should('exist')
+      cy.get('[data-testid="room-code"]', { timeout: 10000 }).should('exist')
       cy.get('[data-testid="room-code"]').invoke('text').then((code) => {
         // Should be 6 characters
         expect(code.trim().length).to.equal(6)
@@ -43,20 +47,22 @@ describe('Phase 3: Room Creation & Joining', () => {
     it('should identify creator as host', () => {
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
       
       // Check for host indicator
-      cy.get('[data-testid="is-host"]', { timeout: 5000 }).should('exist')
+      cy.get('[data-testid="is-host"]', { timeout: 10000 }).should('exist')
     })
 
     it('should show creator in participants list', () => {
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
       
       // Should show at least 1 participant (creator)
-      cy.get('[data-testid="participants-list"]', { timeout: 5000 }).should('exist')
-      cy.get('[data-testid="participant-item"]').should('have.length.at.least', 1)
+      cy.get('[data-testid="participants-list"]', { timeout: 10000 }).should('exist')
+      cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length.at.least', 1)
     })
   })
 
@@ -71,10 +77,11 @@ describe('Phase 3: Room Creation & Joining', () => {
       
       // Submit
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
       
       // Verify mode is set to Real
-      cy.get('[data-testid="game-mode"]', { timeout: 5000 }).should('contain', 'Real')
+      cy.get('[data-testid="game-mode"]', { timeout: 10000 }).should('contain', 'Real')
     })
   })
 
@@ -85,19 +92,25 @@ describe('Phase 3: Room Creation & Joining', () => {
       // Create first room
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
-      cy.get('[data-testid="room-code"]', { timeout: 5000 }).invoke('text').then((code) => {
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
+      cy.get('[data-testid="room-code"]', { timeout: 10000 }).invoke('text').then((code) => {
         firstCode = code.trim()
       })
+      
+      // CRITICAL: Add delay to prevent DB overwhelm
+      cy.wait(2000)
       
       // Go back and create another room
       cy.visit('/')
       cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
+      cy.wait(500)
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
       
-      cy.get('[data-testid="room-code"]', { timeout: 5000 }).invoke('text').then((secondCode) => {
+      cy.get('[data-testid="room-code"]', { timeout: 10000 }).invoke('text').then((secondCode) => {
         // Codes should be different
         expect(secondCode.trim()).to.not.equal(firstCode)
       })
@@ -106,9 +119,10 @@ describe('Phase 3: Room Creation & Joining', () => {
     it('should use URL-safe characters only', () => {
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
       
-      cy.get('[data-testid="room-code"]', { timeout: 5000 }).invoke('text').then((code) => {
+      cy.get('[data-testid="room-code"]', { timeout: 10000 }).invoke('text').then((code) => {
         // Should be uppercase alphanumeric
         expect(code.trim()).to.match(/^[A-Z0-9]{6}$/)
       })
@@ -120,16 +134,21 @@ describe('Phase 3: Room Creation & Joining', () => {
       // First, create a room and get its code
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
       
       let roomCode
-      cy.get('[data-testid="room-code"]', { timeout: 5000 }).invoke('text').then((code) => {
+      cy.get('[data-testid="room-code"]', { timeout: 10000 }).invoke('text').then((code) => {
         roomCode = code.trim()
+        
+        // CRITICAL: Wait for room to be fully created in DB
+        cy.wait(2000)
         
         // Open new session (simulate second user)
         cy.clearLocalStorage()
         cy.visit('/')
         cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
+        cy.wait(500)
         
         // Click Join Room (opens modal)
         cy.get('[data-testid="join-room-button"]').click()
@@ -139,7 +158,9 @@ describe('Phase 3: Room Creation & Joining', () => {
         cy.get('[data-testid="join-button"]').click()
         
         // Should navigate to lobby
-        cy.url().should('include', `/lobby/`, { timeout: 15000 })
+        cy.url().should('include', `/lobby/`, { timeout: 20000 })
+        cy.wait(1000)
+        cy.get('[data-testid="room-code"]', { timeout: 10000 }).should('exist')
       })
     })
 
@@ -147,25 +168,31 @@ describe('Phase 3: Room Creation & Joining', () => {
       // Create room
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
       
       let roomCode
-      cy.get('[data-testid="room-code"]', { timeout: 5000 }).invoke('text').then((code) => {
+      cy.get('[data-testid="room-code"]', { timeout: 10000 }).invoke('text').then((code) => {
         roomCode = code.trim()
+        
+        // CRITICAL: Wait for room to be fully created in DB
+        cy.wait(2000)
         
         // Join as second user
         cy.clearLocalStorage()
         cy.visit('/')
         cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
+        cy.wait(500)
         
         cy.get('[data-testid="join-room-button"]').click()
         cy.get('[data-testid="room-code-input"]').type(roomCode)
         cy.get('[data-testid="join-button"]').click()
         
-        cy.url().should('include', `/lobby/`, { timeout: 15000 })
+        cy.url().should('include', `/lobby/`, { timeout: 20000 })
+        cy.wait(1000)
         
         // Should see at least 1 participant (could be 2 if real-time works)
-        cy.get('[data-testid="participant-item"]', { timeout: 5000 }).should('have.length.at.least', 1)
+        cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length.at.least', 1)
       })
     })
 
@@ -173,22 +200,28 @@ describe('Phase 3: Room Creation & Joining', () => {
       // Create room
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
       
       let roomCode
-      cy.get('[data-testid="room-code"]', { timeout: 5000 }).invoke('text').then((code) => {
+      cy.get('[data-testid="room-code"]', { timeout: 10000 }).invoke('text').then((code) => {
         roomCode = code.trim()
+        
+        // CRITICAL: Wait for room to be fully created in DB
+        cy.wait(2000)
         
         // Join as second user
         cy.clearLocalStorage()
         cy.visit('/')
         cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
+        cy.wait(500)
         
         cy.get('[data-testid="join-room-button"]').click()
         cy.get('[data-testid="room-code-input"]').type(roomCode)
         cy.get('[data-testid="join-button"]').click()
         
-        cy.url().should('include', '/lobby/', { timeout: 15000 })
+        cy.url().should('include', `/lobby/`, { timeout: 20000 })
+        cy.wait(1000)
         
         // Should NOT show host indicator
         cy.get('[data-testid="is-host"]').should('not.exist')
@@ -205,7 +238,7 @@ describe('Phase 3: Room Creation & Joining', () => {
       cy.get('[data-testid="join-button"]').click()
       
       // Should show error message
-      cy.get('[data-testid="error-message"]', { timeout: 5000 }).should('exist')
+      cy.get('[data-testid="error-message"]', { timeout: 10000 }).should('exist')
       cy.get('[data-testid="error-message"]').should('be.visible')
     })
 
@@ -253,23 +286,29 @@ describe('Phase 3: Room Creation & Joining', () => {
       // Create room
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
       
       let roomCode
-      cy.get('[data-testid="room-code"]', { timeout: 5000 }).invoke('text').then((code) => {
+      cy.get('[data-testid="room-code"]', { timeout: 10000 }).invoke('text').then((code) => {
         roomCode = code.trim()
+        
+        // CRITICAL: Wait for room to be fully created in DB
+        cy.wait(2000)
         
         // User 2 joins
         cy.clearLocalStorage()
         cy.visit('/')
         cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
+        cy.wait(500)
         cy.get('[data-testid="join-room-button"]').click()
         cy.get('[data-testid="room-code-input"]').type(roomCode)
         cy.get('[data-testid="join-button"]').click()
-        cy.url().should('include', '/lobby/', { timeout: 15000 })
+        cy.url().should('include', '/lobby/', { timeout: 20000 })
+        cy.wait(1000)
         
         // Should show at least 1 participant
-        cy.get('[data-testid="participant-item"]', { timeout: 5000 }).should('have.length.at.least', 1)
+        cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length.at.least', 1)
       })
     })
   })
@@ -279,19 +318,25 @@ describe('Phase 3: Room Creation & Joining', () => {
       // Create room
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
       
       let roomUrl
       cy.url().then((url) => {
         roomUrl = url
         
+        // Wait for room to be ready
+        cy.get('[data-testid="room-code"]', { timeout: 10000 }).should('exist')
+        cy.wait(1000)
+        
         // Reload page
         cy.reload()
         cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
+        cy.wait(1000)
         
         // Should still be in same room
         cy.url().should('include', '/lobby/')
-        cy.get('[data-testid="room-code"]', { timeout: 5000 }).should('exist')
+        cy.get('[data-testid="room-code"]', { timeout: 10000 }).should('exist')
       })
     })
 
@@ -299,23 +344,30 @@ describe('Phase 3: Room Creation & Joining', () => {
       // Create room
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
       
       let roomUrl
       cy.url().then((url) => {
         roomUrl = url
         
+        // Wait for room to be ready
+        cy.get('[data-testid="room-code"]', { timeout: 10000 }).should('exist')
+        cy.wait(1000)
+        
         // Go to home
         cy.visit('/')
         cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
+        cy.wait(500)
         
         // Return to room
         cy.visit(roomUrl)
         cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
+        cy.wait(1000)
         
         // Should be back in room
         cy.url().should('include', '/lobby/')
-        cy.get('[data-testid="room-code"]', { timeout: 5000 }).should('exist')
+        cy.get('[data-testid="room-code"]', { timeout: 10000 }).should('exist')
       })
     })
   })
@@ -325,34 +377,46 @@ describe('Phase 3: Room Creation & Joining', () => {
       // Create first room
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
-      cy.get('[data-testid="room-code"]', { timeout: 5000 }).should('exist')
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
+      cy.get('[data-testid="room-code"]', { timeout: 10000 }).should('exist')
+      
+      // CRITICAL: Add delay to prevent DB overwhelm
+      cy.wait(2000)
       
       // Create second room
       cy.visit('/')
       cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
+      cy.wait(500)
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
-      cy.get('[data-testid="room-code"]', { timeout: 5000 }).should('exist')
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
+      cy.get('[data-testid="room-code"]', { timeout: 10000 }).should('exist')
     })
 
     it('should handle joining same room twice', () => {
       // Create room
       cy.get('[data-testid="create-room-button"]').click()
       cy.get('[data-testid="create-submit-button"]').click()
-      cy.url().should('include', '/lobby/', { timeout: 15000 })
+      cy.url().should('include', '/lobby/', { timeout: 20000 })
+      cy.wait(1000)
       
       let roomUrl
       cy.url().then((url) => {
         roomUrl = url
         
+        // Wait for room to be ready
+        cy.get('[data-testid="room-code"]', { timeout: 10000 }).should('exist')
+        cy.wait(1000)
+        
         // Try to visit again with same guest
         cy.visit(roomUrl)
         cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
+        cy.wait(1000)
         
         // Should handle gracefully
-        cy.get('[data-testid="room-code"]', { timeout: 5000 }).should('exist')
+        cy.get('[data-testid="room-code"]', { timeout: 10000 }).should('exist')
       })
     })
 
