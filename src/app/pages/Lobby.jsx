@@ -33,7 +33,17 @@ const Lobby = () => {
 
   // Load room data ONCE on mount
   useEffect(() => {
-    console.log('🏠 Lobby mounted with roomId:', roomId)
+    console.log('🎯 Lobby mounted with roomId:', roomId)
+    
+    // Prevent duplicate loads during React strict mode double-mount
+    const isAlreadyLoaded = room?.id === roomId
+    const hasParticipants = participants.length > 0
+    
+    if (isAlreadyLoaded && hasParticipants) {
+      console.log('Room already loaded with participants, skipping')
+      setIsLoadingRoom(false)
+      return
+    }
     
     if (!roomId || roomId === 'undefined') {
       console.error('❌ Invalid roomId, redirecting home')
@@ -52,12 +62,7 @@ const Lobby = () => {
         setIsLoadingRoom(false)
         // Don't auto-redirect on error, let user see error message
       })
-
-    return () => {
-      console.log('👋 Lobby unmounting (no auto leave)')
-      // IMPORTANT: no leaveRoom() here at all
-    }
-  }, [roomId]) // Include roomId in dependency
+  }, [roomId]) // Only depend on roomId
 
   // Navigate when game starts
   useEffect(() => {
@@ -177,7 +182,7 @@ const Lobby = () => {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-gray-900 rounded-lg p-4">
               <p className="text-gray-400 text-sm mb-1">Mode</p>
-              <p data-testid="game-mode" className="text-white font-semibold">{room?.game_mode || 'SILENT'}</p>
+              <p data-testid="game-mode" className="text-white font-semibold">{room?.game_mode === 'REAL' ? 'Real' : 'Silent'}</p>
             </div>
             <div className="bg-gray-900 rounded-lg p-4">
               <p className="text-gray-400 text-sm mb-1">Difficulty</p>
@@ -311,7 +316,7 @@ const Lobby = () => {
           ) : (
             <div className="flex-1 py-4 bg-gray-700 rounded-xl font-bold text-gray-400 text-lg text-center">⏳ Waiting for host...</div>
           )}
-          <button onClick={handleLeave} className="px-6 py-4 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors">🚺 Leave</button>
+          <button onClick={handleLeave} className="px-6 py-4 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors">🚪 Leave</button>
         </motion.div>
 
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="mt-8 text-center text-gray-400 text-sm">
