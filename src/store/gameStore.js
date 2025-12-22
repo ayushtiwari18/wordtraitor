@@ -350,7 +350,8 @@ const useGameStore = create((set, get) => ({
     console.log(`⏰ Starting ${phaseName} phase (${duration}s)`)
     
     // Clear existing timer
-    const { phaseInterval } = get()    if (phaseInterval) {
+    const { phaseInterval } = get()
+    if (phaseInterval) {
       clearInterval(phaseInterval)
     }
     
