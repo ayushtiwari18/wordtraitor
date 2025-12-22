@@ -35,22 +35,20 @@ const Lobby = () => {
   useEffect(() => {
     console.log('🎯 Lobby mounted with roomId:', roomId)
     
-    // Prevent duplicate loads during React strict mode double-mount
-    const isAlreadyLoaded = room?.id === roomId
-    const hasParticipants = participants.length > 0
+    // CRITICAL: Don't validate roomId here - it comes from URL and React Router
+    // If someone navigates to /lobby/xyz, roomId will be 'xyz' which is valid
+    // We'll let loadRoom handle validation and errors
     
-    if (isAlreadyLoaded && hasParticipants) {
+    // Prevent duplicate loads during React strict mode double-mount
+    const hasParticipants = participants && participants.length > 0
+    const isAlreadyLoaded = room && room.id === roomId && hasParticipants
+    
+    if (isAlreadyLoaded) {
       console.log('Room already loaded with participants, skipping')
       setIsLoadingRoom(false)
       return
     }
     
-    if (!roomId || roomId === 'undefined') {
-      console.error('❌ Invalid roomId, redirecting home')
-      navigate('/')
-      return
-    }
-
     setIsLoadingRoom(true)
     loadRoom(roomId)
       .then(() => {
