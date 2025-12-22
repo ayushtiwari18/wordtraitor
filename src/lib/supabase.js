@@ -59,7 +59,12 @@ export const gameHelpers = {
         .single()
       
       if (error) {
-        console.error('❌ Room creation error:', error)
+        console.error('❌ Room creation error:')
+        console.error('  Message:', error.message)
+        console.error('  Code:', error.code)
+        console.error('  Details:', error.details)
+        console.error('  Hint:', error.hint)
+        console.error('  Full error:', JSON.stringify(error, null, 2))
         throw error
       }
       
@@ -75,7 +80,10 @@ export const gameHelpers = {
         })
       
       if (participantError) {
-        console.error('❌ Participant add error:', participantError)
+        console.error('❌ Participant add error:')
+        console.error('  Message:', participantError.message)
+        console.error('  Code:', participantError.code)
+        console.error('  Details:', participantError.details)
         throw participantError
       }
       
