@@ -66,12 +66,21 @@ const Home = () => {
         const targetUrl = `/lobby/${room.room_code}`
         console.log('🚀 Navigating to:', targetUrl)
         
-        // FIX: Use replace option and wait for navigation to complete
+        // AGGRESSIVE FIX: Use both navigate() AND window.location for guaranteed navigation
         if (isMountedRef.current) {
+          // Try React Router first
           navigate(targetUrl, { replace: true })
           
-          // CRITICAL: Wait for navigation to process before cleaning up state
-          await new Promise(resolve => setTimeout(resolve, 150))
+          // Then use direct window.location as backup (will override if navigate fails)
+          setTimeout(() => {
+            if (window.location.pathname === '/') {
+              console.log('⚠️ Navigate failed, using window.location')
+              window.location.href = targetUrl
+            }
+          }, 100)
+          
+          // Wait for navigation
+          await new Promise(resolve => setTimeout(resolve, 200))
           
           if (isMountedRef.current) {
             setShowJoinModal(false)
@@ -143,12 +152,21 @@ const Home = () => {
         const targetUrl = `/lobby/${room.room_code}`
         console.log('🚀 Navigating to:', targetUrl)
         
-        // FIX: Use replace option and wait for navigation to complete
+        // AGGRESSIVE FIX: Use both navigate() AND window.location for guaranteed navigation
         if (isMountedRef.current) {
+          // Try React Router first
           navigate(targetUrl, { replace: true })
           
-          // CRITICAL: Wait for navigation to process before cleaning up state
-          await new Promise(resolve => setTimeout(resolve, 150))
+          // Then use direct window.location as backup (will override if navigate fails)
+          setTimeout(() => {
+            if (window.location.pathname === '/') {
+              console.log('⚠️ Navigate failed, using window.location')
+              window.location.href = targetUrl
+            }
+          }, 100)
+          
+          // Wait for navigation
+          await new Promise(resolve => setTimeout(resolve, 200))
           
           if (isMountedRef.current) {
             setShowCreateModal(false)
