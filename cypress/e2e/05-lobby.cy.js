@@ -8,6 +8,11 @@ describe('Phase 2: Lobby & Settings', () => {
     cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
   })
 
+  // Add delay after each test to avoid Supabase rate limits
+  afterEach(() => {
+    cy.wait(3000) // 3 second cool-down between tests
+  })
+
   describe('TC040-048: Lobby Display', () => {
     
     it('TC040: should display room code correctly', () => {
