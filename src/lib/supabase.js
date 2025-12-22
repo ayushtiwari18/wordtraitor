@@ -18,21 +18,6 @@ export const supabase = supabaseUrl && supabaseAnonKey
         params: {
           eventsPerSecond: 10
         }
-      },
-      global: {
-        fetch: (...args) => {
-          const [resource, config] = args
-          const controller = new AbortController()
-          const timeout = setTimeout(() => {
-            controller.abort()
-            console.error('❌ Request timeout after 30s')
-          }, 30000) // 30 second timeout (increased from 10s)
-          
-          return fetch(resource, {
-            ...config,
-            signal: controller.signal
-          }).finally(() => clearTimeout(timeout))
-        }
       }
     })
   : null
