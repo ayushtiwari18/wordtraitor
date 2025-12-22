@@ -321,7 +321,7 @@ const useGameStore = create((set, get) => ({
     }
   },
 
-  getPhaseD uration: (phaseName) => {
+  getPhaseDuration: (phaseName) => {
     const { customTimings } = get()
     if (customTimings && customTimings[phaseName]) {
       return customTimings[phaseName]
