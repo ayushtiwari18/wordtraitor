@@ -62,20 +62,33 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   initializeGuest: () => {
-    // Check if already initialized
+    // Check if already initialized in store
     const { myUserId, myUsername } = get()
     if (myUserId && myUsername) {
       console.log('✅ Guest already initialized:', myUsername, `(${myUserId.slice(0, 20)}...)`)
       return { guestId: myUserId, guestUsername: myUsername }
     }
 
-    // Get from localStorage or generate new
-    const guestId = localStorage.getItem('guestId') || `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const guestUsername = localStorage.getItem('guestUsername') || `Player${Math.floor(Math.random() * 9999)}`
+    // Get from localStorage (check for empty strings too)
+    let guestId = localStorage.getItem('guestId')
+    let guestUsername = localStorage.getItem('guestUsername')
     
+    // Validate: regenerate if null, undefined, or empty string
+    if (!guestId || guestId.trim() === '') {
+      guestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      console.log('🆕 Generated new guest ID')
+    }
+    
+    if (!guestUsername || guestUsername.trim() === '') {
+      guestUsername = `Player${Math.floor(Math.random() * 9999)}`
+      console.log('🆕 Generated new username')
+    }
+    
+    // Save to localStorage
     localStorage.setItem('guestId', guestId)
     localStorage.setItem('guestUsername', guestUsername)
     
+    // Update store
     set({ myUserId: guestId, myUsername: guestUsername })
     console.log('👤 Guest initialized:', guestUsername, `(${guestId.slice(0, 20)}...)`)
     return { guestId, guestUsername }
@@ -337,8 +350,7 @@ const useGameStore = create((set, get) => ({
     console.log(`⏰ Starting ${phaseName} phase (${duration}s)`)
     
     // Clear existing timer
-    const { phaseInterval } = get()
-    if (phaseInterval) {
+    const { phaseInterval } = get()    if (phaseInterval) {
       clearInterval(phaseInterval)
     }
     
