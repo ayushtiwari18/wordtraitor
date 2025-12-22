@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
-import { Copy, Check, Users, Settings } from 'lucide-react'
+import { Copy, Check, Users, Settings, ChevronDown, ChevronUp, Clock } from 'lucide-react'
 
 const Lobby = () => {
   const params = useParams()
@@ -21,11 +21,14 @@ const Lobby = () => {
     leaveRoom,
     isLoading,
     error,
-    isConnected
+    isConnected,
+    customTimings,
+    traitorCount
   } = useGameStore()
 
   const [copied, setCopied] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   // Load room data ONCE on mount
   useEffect(() => {
@@ -87,6 +90,8 @@ const Lobby = () => {
     navigate('/')
   }
 
+  const hasCustomSettings = customTimings !== null || traitorCount > 1
+
   if (isLoading && !room) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -146,12 +151,18 @@ const Lobby = () => {
           {copied && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-green-400 text-sm mt-3">✓ Copied!</motion.p>}
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-gray-800 border-2 border-gray-700 rounded-2xl p-6 mb-8">
+        {/* Basic Settings */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-gray-800 border-2 border-gray-700 rounded-2xl p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Settings className="w-5 h-5 text-purple-400" />
-            <h3 className="text-xl font-bold text-white">Settings</h3>
+            <h3 className="text-xl font-bold text-white">Game Settings</h3>
+            {hasCustomSettings && (
+              <span className="ml-auto px-2 py-1 bg-purple-500/20 border border-purple-500 rounded text-xs text-purple-400 font-semibold">
+                ⚙️ Custom
+              </span>
+            )}
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-gray-900 rounded-lg p-4">
               <p className="text-gray-400 text-sm mb-1">Mode</p>
               <p className="text-white font-semibold">{room?.game_mode || 'SILENT'}</p>
@@ -161,12 +172,76 @@ const Lobby = () => {
               <p className="text-white font-semibold">{room?.difficulty || 'MEDIUM'}</p>
             </div>
             <div className="bg-gray-900 rounded-lg p-4">
-              <p className="text-gray-400 text-sm mb-1">Pack</p>
+              <p className="text-gray-400 text-sm mb-1">Word Pack</p>
               <p className="text-white font-semibold">{room?.word_pack || 'GENERAL'}</p>
+            </div>
+            <div className="bg-gray-900 rounded-lg p-4">
+              <p className="text-gray-400 text-sm mb-1">Traitors</p>
+              <p className="text-white font-semibold flex items-center gap-1">
+                {traitorCount}
+                {traitorCount > 1 && <span className="text-xs text-purple-400">✨</span>}
+              </p>
             </div>
           </div>
         </motion.div>
 
+        {/* Advanced Settings (Collapsible) */}
+        {hasCustomSettings && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ delay: 0.25 }}
+            className="bg-gray-800 border-2 border-gray-700 rounded-2xl p-6 mb-8"
+          >
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="w-full flex items-center justify-between text-white hover:text-purple-400 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5" />
+                <span className="font-semibold">Phase Timings</span>
+              </div>
+              {showAdvanced ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </button>
+            
+            <AnimatePresence>
+              {showAdvanced && customTimings && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden"
+                >
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-700">
+                    <div className="bg-gray-900 rounded-lg p-3">
+                      <p className="text-gray-400 text-xs mb-1">Whisper Phase</p>
+                      <p className="text-white font-semibold">{customTimings.WHISPER || 30}s</p>
+                    </div>
+                    <div className="bg-gray-900 rounded-lg p-3">
+                      <p className="text-gray-400 text-xs mb-1">Hint Drop</p>
+                      <p className="text-white font-semibold">{customTimings.HINT_DROP || 60}s</p>
+                    </div>
+                    <div className="bg-gray-900 rounded-lg p-3">
+                      <p className="text-gray-400 text-xs mb-1">Debate</p>
+                      <p className="text-white font-semibold">{customTimings.DEBATE || 120}s</p>
+                    </div>
+                    <div className="bg-gray-900 rounded-lg p-3">
+                      <p className="text-gray-400 text-xs mb-1">Verdict</p>
+                      <p className="text-white font-semibold">{customTimings.VERDICT || 45}s</p>
+                    </div>
+                    <div className="bg-gray-900 rounded-lg p-3">
+                      <p className="text-gray-400 text-xs mb-1">Reveal</p>
+                      <p className="text-white font-semibold">{customTimings.REVEAL || 15}s</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        )}
+
+        {/* Players */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-gray-800 border-2 border-gray-700 rounded-2xl p-6 mb-8">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
@@ -204,6 +279,7 @@ const Lobby = () => {
           )}
         </motion.div>
 
+        {/* Action Buttons */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="flex gap-4">
           {isHost ? (
             <button onClick={handleStartGame} disabled={participants.length < 2 || isStarting} className="flex-1 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-xl font-bold text-white text-lg transition-colors shadow-lg">
@@ -216,7 +292,7 @@ const Lobby = () => {
         </motion.div>
 
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="mt-8 text-center text-gray-400 text-sm">
-          <p>💡 Share the code with a friend!</p>
+          <p>💡 Share the code with friends to start playing!</p>
         </motion.div>
       </div>
     </div>
