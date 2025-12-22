@@ -43,10 +43,15 @@ const Home = () => {
       console.log('🚪 Joining room with code:', roomCode)
       const room = await joinRoom(roomCode.toUpperCase())
       console.log('✅ Room joined, navigating to:', `/lobby/${room.id}`)
+      
+      // Close modal first
+      setShowJoinModal(false)
+      
+      // Navigate
       navigate(`/lobby/${room.id}`)
     } catch (err) {
       console.error('❌ Join error:', err)
-      setError(err.message)
+      setError(err.message || 'Failed to join room')
     } finally {
       setIsJoining(false)
     }
@@ -78,11 +83,21 @@ const Home = () => {
         throw new Error('Room creation failed - no room ID returned')
       }
       
-      navigate(`/lobby/${room.id}`)
+      console.log('🧠 Room ID:', room.id)
+      
+      // CRITICAL: Close modal BEFORE navigation
+      setShowCreateModal(false)
+      setIsCreating(false)
+      
+      // Small delay to ensure modal closes
+      setTimeout(() => {
+        console.log('📦 Navigating to:', `/lobby/${room.id}`)
+        navigate(`/lobby/${room.id}`)
+      }, 100)
+      
     } catch (err) {
       console.error('❌ Create error:', err)
-      setError(err.message)
-    } finally {
+      setError(err.message || 'Failed to create room')
       setIsCreating(false)
     }
   }
