@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
-import { Play, Users, Sparkles } from 'lucide-react'
+import { Play, Users, Sparkles, Settings, ChevronDown, ChevronUp } from 'lucide-react'
 
 const Home = () => {
   const navigate = useNavigate()
@@ -10,15 +10,24 @@ const Home = () => {
 
   const [showJoinModal, setShowJoinModal] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const [roomCode, setRoomCode] = useState('')
   const [isJoining, setIsJoining] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState('')
 
-  // Create room settings
+  // Basic settings
   const [gameMode, setGameMode] = useState('SILENT')
   const [difficulty, setDifficulty] = useState('MEDIUM')
   const [wordPack, setWordPack] = useState('GENERAL')
+  
+  // Advanced settings
+  const [traitorCount, setTraitorCount] = useState(1)
+  const [whisperTime, setWhisperTime] = useState(30)
+  const [hintDropTime, setHintDropTime] = useState(60)
+  const [debateTime, setDebateTime] = useState(120)
+  const [verdictTime, setVerdictTime] = useState(45)
+  const [revealTime, setRevealTime] = useState(15)
 
   const handleJoinRoom = async (e) => {
     e.preventDefault()
@@ -49,13 +58,22 @@ const Home = () => {
     setIsCreating(true)
 
     try {
-      console.log('🏠 Creating room with:', { gameMode, difficulty, wordPack })
-      const room = await createRoom(gameMode, difficulty, wordPack)
-      console.log('✅ Room created:', room)
-      console.log('📍 Room ID:', room.id)
-      console.log('🧭 Navigating to:', `/lobby/${room.id}`)
+      // Prepare custom settings
+      const customSettings = {
+        traitorCount,
+        timings: {
+          WHISPER: whisperTime,
+          HINT_DROP: hintDropTime,
+          DEBATE: debateTime,
+          VERDICT: verdictTime,
+          REVEAL: revealTime
+        }
+      }
       
-      // Ensure room.id exists before navigating
+      console.log('🏠 Creating room with:', { gameMode, difficulty, wordPack, customSettings })
+      const room = await createRoom(gameMode, difficulty, wordPack, customSettings)
+      console.log('✅ Room created:', room)
+      
       if (!room || !room.id) {
         throw new Error('Room creation failed - no room ID returned')
       }
@@ -231,20 +249,20 @@ const Home = () => {
             <h2 className="text-2xl font-bold text-white mb-6">Create Room</h2>
             <form onSubmit={handleCreateRoom}>
               {/* Game Mode */}
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-gray-300 mb-2">Game Mode</label>
                 <select
                   value={gameMode}
                   onChange={(e) => setGameMode(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500"
                 >
-                  <option value="SILENT">Silent Mode (No voice chat)</option>
-                  <option value="REAL">Real Mode (With voice chat)</option>
+                  <option value="SILENT">Silent Mode (Text chat + hints)</option>
+                  <option value="REAL">Real Mode (Voice chat)</option>
                 </select>
               </div>
 
               {/* Difficulty */}
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-gray-300 mb-2">Difficulty</label>
                 <select
                   value={difficulty}
@@ -258,7 +276,7 @@ const Home = () => {
               </div>
 
               {/* Word Pack */}
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-gray-300 mb-2">Word Pack</label>
                 <select
                   value={wordPack}
@@ -274,6 +292,116 @@ const Home = () => {
                 </select>
               </div>
 
+              {/* Advanced Settings Toggle */}
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="w-full mb-4 p-3 bg-gray-900 border border-gray-700 hover:border-purple-500 rounded-lg text-white flex items-center justify-between transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Settings className="w-4 h-4" />
+                  Advanced Settings
+                </span>
+                {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+
+              {/* Advanced Settings */}
+              <AnimatePresence>
+                {showAdvanced && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-4 space-y-4">
+                      {/* Traitor Count */}
+                      <div>
+                        <label className="block text-gray-300 mb-2 text-sm">
+                          Number of Traitors (1-3)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="3"
+                          value={traitorCount}
+                          onChange={(e) => setTraitorCount(parseInt(e.target.value) || 1)}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+
+                      {/* Phase Timings */}
+                      <div>
+                        <p className="text-gray-300 text-sm font-semibold mb-2">Phase Timings (seconds)</p>
+                        
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-gray-400 text-xs">Whisper Phase</label>
+                            <input
+                              type="number"
+                              min="10"
+                              max="300"
+                              value={whisperTime}
+                              onChange={(e) => setWhisperTime(parseInt(e.target.value) || 30)}
+                              className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                            />
+                          </div>
+                          
+                          <div className="flex items-center justify-between">
+                            <label className="text-gray-400 text-xs">Hint Drop Phase</label>
+                            <input
+                              type="number"
+                              min="10"
+                              max="300"
+                              value={hintDropTime}
+                              onChange={(e) => setHintDropTime(parseInt(e.target.value) || 60)}
+                              className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                            />
+                          </div>
+                          
+                          <div className="flex items-center justify-between">
+                            <label className="text-gray-400 text-xs">Debate Phase</label>
+                            <input
+                              type="number"
+                              min="10"
+                              max="600"
+                              value={debateTime}
+                              onChange={(e) => setDebateTime(parseInt(e.target.value) || 120)}
+                              className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                            />
+                          </div>
+                          
+                          <div className="flex items-center justify-between">
+                            <label className="text-gray-400 text-xs">Verdict Phase</label>
+                            <input
+                              type="number"
+                              min="10"
+                              max="300"
+                              value={verdictTime}
+                              onChange={(e) => setVerdictTime(parseInt(e.target.value) || 45)}
+                              className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                            />
+                          </div>
+                          
+                          <div className="flex items-center justify-between">
+                            <label className="text-gray-400 text-xs">Reveal Phase</label>
+                            <input
+                              type="number"
+                              min="5"
+                              max="60"
+                              value={revealTime}
+                              onChange={(e) => setRevealTime(parseInt(e.target.value) || 15)}
+                              className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {error && (
                 <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400 text-sm">
                   {error}
@@ -286,6 +414,7 @@ const Home = () => {
                   onClick={() => {
                     setShowCreateModal(false)
                     setError('')
+                    setShowAdvanced(false)
                   }}
                   className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold text-white transition-colors"
                 >
