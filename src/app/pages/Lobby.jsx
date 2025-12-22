@@ -9,7 +9,7 @@ const Lobby = () => {
   const navigate = useNavigate()
   
   // Extract roomId from params OR pathname
-  const roomId = params.roomId || params.roomCode || window.location.pathname.split('/')[2]
+  const roomIdOrCode = params.roomId || params.roomCode || window.location.pathname.split('/')[2]
   
   const { 
     room, 
@@ -33,24 +33,22 @@ const Lobby = () => {
 
   // Load room data ONCE on mount
   useEffect(() => {
-    console.log('🎯 Lobby mounted with roomId:', roomId)
+    console.log('🎯 Lobby mounted with roomId:', roomIdOrCode)
     
-    // CRITICAL: Don't validate roomId here - it comes from URL and React Router
-    // If someone navigates to /lobby/xyz, roomId will be 'xyz' which is valid
-    // We'll let loadRoom handle validation and errors
-    
-    // Prevent duplicate loads during React strict mode double-mount
+    // CRITICAL FIX: Check if room is already loaded by room_code (not id)
+    // roomIdOrCode from URL is the 6-char room code, not UUID
     const hasParticipants = participants && participants.length > 0
-    const isAlreadyLoaded = room && room.id === roomId && hasParticipants
+    const isAlreadyLoadedByCode = room && room.room_code === roomIdOrCode && hasParticipants
+    const isAlreadyLoadedById = room && room.id === roomIdOrCode && hasParticipants
     
-    if (isAlreadyLoaded) {
-      console.log('Room already loaded with participants, skipping')
+    if (isAlreadyLoadedByCode || isAlreadyLoadedById) {
+      console.log('✅ Room already loaded with participants, skipping')
       setIsLoadingRoom(false)
       return
     }
     
     setIsLoadingRoom(true)
-    loadRoom(roomId)
+    loadRoom(roomIdOrCode)
       .then(() => {
         console.log('✅ Room loaded successfully')
         setIsLoadingRoom(false)
@@ -58,17 +56,18 @@ const Lobby = () => {
       .catch(err => {
         console.error('❌ Load error:', err)
         setIsLoadingRoom(false)
-        // Don't auto-redirect on error, let user see error message
+        // Don't clear room if first load succeeded and only second failed
+        // This prevents UI from breaking on React StrictMode double-mount
       })
-  }, [roomId]) // Only depend on roomId
+  }, [roomIdOrCode]) // Only depend on roomIdOrCode
 
   // Navigate when game starts
   useEffect(() => {
     if (room?.status === 'PLAYING') {
       console.log('🎮 Navigating to game')
-      navigate(`/game/${roomId}`)
+      navigate(`/game/${roomIdOrCode}`)
     }
-  }, [room?.status, roomId, navigate])
+  }, [room?.status, roomIdOrCode, navigate])
 
   const handleCopyCode = () => {
     if (room?.room_code) {
@@ -101,8 +100,8 @@ const Lobby = () => {
 
   const hasCustomSettings = customTimings !== null || traitorCount > 1
 
-  // Loading state
-  if (isLoadingRoom || (isLoading && !room)) {
+  // Loading state (but still show room if we have it)
+  if (isLoadingRoom && !room) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
         <div className="text-center">
@@ -113,7 +112,7 @@ const Lobby = () => {
     )
   }
 
-  // Error state
+  // Error state (ONLY if we don't have room data)
   if (error && !room) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
