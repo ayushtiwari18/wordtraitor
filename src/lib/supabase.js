@@ -29,8 +29,8 @@ export const isSupabaseConfigured = () => {
 
 // Game room helpers for anonymous users
 export const gameHelpers = {
-  // Create room with guest ID
-  createRoom: async (guestId, username, gameMode = 'SILENT', difficulty = 'MEDIUM', wordPack = 'GENERAL') => {
+  // Create room with guest ID and custom settings
+  createRoom: async (guestId, username, gameMode = 'SILENT', difficulty = 'MEDIUM', wordPack = 'GENERAL', customSettings = {}) => {
     if (!supabase) throw new Error('Supabase not configured')
     
     const roomCode = generateRoomCode()
@@ -43,7 +43,9 @@ export const gameHelpers = {
         game_mode: gameMode,
         difficulty: difficulty,
         word_pack: wordPack,
-        status: 'LOBBY'
+        status: 'LOBBY',
+        custom_timings: customSettings.timings || null,
+        traitor_count: customSettings.traitorCount || 1
       })
       .select()
       .single()
@@ -76,7 +78,7 @@ export const gameHelpers = {
     
     if (roomError) throw new Error('Room not found or already started')
     
-    // Check if already joined - FIXED: removed .single()
+    // Check if already joined
     const { data: existing, error: existingError } = await supabase
       .from('room_participants')
       .select('user_id')
@@ -129,7 +131,7 @@ export const gameHelpers = {
       return null
     }
     
-    // Check if already joined - FIXED: removed .single()
+    // Check if already joined
     const { data: existing, error: existingError } = await supabase
       .from('room_participants')
       .select('user_id')
@@ -216,8 +218,8 @@ export const gameHelpers = {
     return data
   },
 
-  // Assign roles and words
-  assignRoles: async (roomId, participants, difficulty, wordPack) => {
+  // Assign roles and words with support for multiple traitors
+  assignRoles: async (roomId, participants, difficulty, wordPack, traitorCount = 1) => {
     if (!supabase) throw new Error('Supabase not configured')
     
     // Get random word pair
@@ -233,16 +235,23 @@ export const gameHelpers = {
     
     const wordPair = wordPairs[Math.floor(Math.random() * wordPairs.length)]
     
-    // Randomly select traitor
-    const traitorIndex = Math.floor(Math.random() * participants.length)
+    // Randomly select traitors
+    const traitorIndices = []
+    const availableIndices = participants.map((_, i) => i)
+    
+    for (let i = 0; i < traitorCount; i++) {
+      const randomIndex = Math.floor(Math.random() * availableIndices.length)
+      traitorIndices.push(availableIndices[randomIndex])
+      availableIndices.splice(randomIndex, 1)
+    }
     
     // Assign roles
     const assignments = participants.map((p, index) => ({
       room_id: roomId,
       user_id: p.user_id,
       round_number: 1,
-      role: index === traitorIndex ? 'TRAITOR' : 'CITIZEN',
-      secret_word: index === traitorIndex ? wordPair.traitor_word : wordPair.main_word
+      role: traitorIndices.includes(index) ? 'TRAITOR' : 'CITIZEN',
+      secret_word: traitorIndices.includes(index) ? wordPair.traitor_word : wordPair.main_word
     }))
     
     const { error } = await supabase
@@ -250,10 +259,12 @@ export const gameHelpers = {
       .insert(assignments)
     
     if (error) throw error
-    return { wordPair, traitorId: participants[traitorIndex].user_id }
+    
+    const traitorIds = traitorIndices.map(i => participants[i].user_id)
+    return { wordPair, traitorIds }
   },
 
-  // Get my secret word - FIXED: handle 0 rows
+  // Get my secret word
   getMySecret: async (roomId, userId) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -317,6 +328,53 @@ export const gameHelpers = {
     
     if (error) throw error
     return data
+  },
+
+  // Send chat message (for debate phase)
+  sendChatMessage: async (roomId, userId, username, message) => {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    const { data: room } = await supabase
+      .from('game_rooms')
+      .select('current_round')
+      .eq('id', roomId)
+      .single()
+    
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .insert({
+        room_id: roomId,
+        user_id: userId,
+        username: username,
+        message: message,
+        round_number: room.current_round
+      })
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
+  },
+
+  // Get chat messages for current round
+  getChatMessages: async (roomId) => {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    const { data: room } = await supabase
+      .from('game_rooms')
+      .select('current_round')
+      .eq('id', roomId)
+      .single()
+    
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('room_id', roomId)
+      .eq('round_number', room.current_round)
+      .order('created_at')
+    
+    if (error) throw error
+    return data || []
   },
 
   // Submit vote
@@ -400,7 +458,7 @@ export const gameHelpers = {
     if (error) throw error
   },
 
-  // Check game end conditions
+  // Check game end conditions (updated for multiple traitors)
   checkGameEnd: async (roomId) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -411,30 +469,41 @@ export const gameHelpers = {
       .eq('room_id', roomId)
       .eq('is_alive', true)
     
-    // Get traitor info
+    // Get all secrets
     const { data: secrets } = await supabase
       .from('round_secrets')
       .select('user_id, role')
       .eq('room_id', roomId)
     
-    const traitor = secrets?.find(s => s.role === 'TRAITOR')
-    const isTraitorAlive = alive?.some(p => p.user_id === traitor?.user_id)
+    const traitors = secrets?.filter(s => s.role === 'TRAITOR') || []
+    const aliveTraitors = traitors.filter(t => 
+      alive?.some(p => p.user_id === t.user_id)
+    )
     
-    // Citizens win if traitor eliminated
-    if (!isTraitorAlive) {
-      return { ended: true, winner: 'CITIZENS', traitorId: traitor?.user_id }
+    // Citizens win if all traitors eliminated
+    if (aliveTraitors.length === 0) {
+      return { 
+        ended: true, 
+        winner: 'CITIZENS', 
+        traitorIds: traitors.map(t => t.user_id)
+      }
     }
     
-    // Traitor wins if only 2 players left
-    if (alive && alive.length <= 2) {
-      return { ended: true, winner: 'TRAITOR', traitorId: traitor?.user_id }
+    // Traitors win if they equal or outnumber citizens
+    const aliveCitizens = alive.length - aliveTraitors.length
+    if (aliveTraitors.length >= aliveCitizens) {
+      return { 
+        ended: true, 
+        winner: 'TRAITORS', 
+        traitorIds: traitors.map(t => t.user_id)
+      }
     }
     
     return { ended: false }
   },
 
   // End game
-  endGame: async (roomId, winner, traitorId) => {
+  endGame: async (roomId, winner, traitorIds) => {
     if (!supabase) throw new Error('Supabase not configured')
     
     const { data, error } = await supabase
@@ -448,7 +517,7 @@ export const gameHelpers = {
       .single()
     
     if (error) throw error
-    return { ...data, winner, traitorId }
+    return { ...data, winner, traitorIds }
   },
 
   // Leave room
@@ -513,6 +582,16 @@ export const realtimeHelpers = {
           filter: `room_id=eq.${roomId}`
         },
         callbacks.onVoteSubmitted
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `room_id=eq.${roomId}`
+        },
+        callbacks.onChatMessage || (() => {})
       )
       .subscribe()
     
