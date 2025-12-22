@@ -60,11 +60,13 @@ const Home = () => {
       setError('')
       setIsJoining(false)
       
-      // Wait for DOM update then navigate
-      requestAnimationFrame(() => {
-        console.log('🚀 Navigating to:', `/lobby/${room.id}`)
-        navigate(`/lobby/${room.id}`)
-      })
+      // Small delay to ensure modal unmounts
+      setTimeout(() => {
+        if (isMountedRef.current) {
+          console.log('🚀 Navigating to:', `/lobby/${room.id}`)
+          navigate(`/lobby/${room.id}`)
+        }
+      }, 50)
     } catch (err) {
       console.error('❌ Join error:', err)
       if (isMountedRef.current) {
@@ -109,11 +111,13 @@ const Home = () => {
       setShowAdvanced(false)
       setIsCreating(false)
       
-      // Wait for DOM update then navigate
-      requestAnimationFrame(() => {
-        console.log('🚀 Navigating to:', `/lobby/${room.id}`)
-        navigate(`/lobby/${room.id}`)
-      })
+      // Small delay to ensure modal unmounts
+      setTimeout(() => {
+        if (isMountedRef.current) {
+          console.log('🚀 Navigating to:', `/lobby/${room.id}`)
+          navigate(`/lobby/${room.id}`)
+        }
+      }, 50)
       
     } catch (err) {
       console.error('❌ Create error:', err)
