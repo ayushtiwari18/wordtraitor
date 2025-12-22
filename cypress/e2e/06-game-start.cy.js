@@ -39,6 +39,10 @@ describe('Phase 2: Game Start', () => {
         const roomCode = code.trim()
         cy.wait(2000)
         
+        // Store host's guest ID before switching
+        const hostGuestId = localStorage.getItem('guest_id')
+        const hostUsername = localStorage.getItem('username')
+        
         // Add second player
         cy.clearLocalStorage()
         cy.visit('/')
@@ -54,8 +58,11 @@ describe('Phase 2: Game Start', () => {
         cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
         cy.wait(1000)
         
-        // Go back to host
-        cy.clearLocalStorage()
+        // Go back to host WITHOUT clearing localStorage (prevents 3rd player creation)
+        // Restore host's session
+        localStorage.setItem('guest_id', hostGuestId)
+        localStorage.setItem('username', hostUsername)
+        
         cy.visit(`/lobby/${roomCode}`)
         cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
         cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
@@ -115,6 +122,10 @@ describe('Phase 2: Game Start', () => {
         const roomCode = code.trim()
         cy.wait(2000)
         
+        // Store host credentials
+        const hostGuestId = localStorage.getItem('guest_id')
+        const hostUsername = localStorage.getItem('username')
+        
         // Add second player
         cy.clearLocalStorage()
         cy.visit('/')
@@ -128,8 +139,10 @@ describe('Phase 2: Game Start', () => {
         cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
         cy.wait(1000)
         
-        // Go back to host and start
-        cy.clearLocalStorage()
+        // Go back to host - restore session instead of creating new player
+        localStorage.setItem('guest_id', hostGuestId)
+        localStorage.setItem('username', hostUsername)
+        
         cy.visit(`/lobby/${roomCode}`)
         cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
         cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
@@ -152,6 +165,10 @@ describe('Phase 2: Game Start', () => {
         const roomCode = code.trim()
         cy.wait(2000)
         
+        // Store host credentials
+        const hostGuestId = localStorage.getItem('guest_id')
+        const hostUsername = localStorage.getItem('username')
+        
         // Add second player
         cy.clearLocalStorage()
         cy.visit('/')
@@ -165,8 +182,10 @@ describe('Phase 2: Game Start', () => {
         cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
         cy.wait(1000)
         
-        // Start game as host
-        cy.clearLocalStorage()
+        // Start game as host - restore session
+        localStorage.setItem('guest_id', hostGuestId)
+        localStorage.setItem('username', hostUsername)
+        
         cy.visit(`/lobby/${roomCode}`)
         cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
         cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
@@ -198,6 +217,10 @@ describe('Phase 2: Game Start', () => {
         const roomCode = code.trim()
         cy.wait(2000)
         
+        // Store host credentials
+        const hostGuestId = localStorage.getItem('guest_id')
+        const hostUsername = localStorage.getItem('username')
+        
         // Add second player
         cy.clearLocalStorage()
         cy.visit('/')
@@ -211,8 +234,10 @@ describe('Phase 2: Game Start', () => {
         cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
         cy.wait(1000)
         
-        // Start game
-        cy.clearLocalStorage()
+        // Start game - restore host session
+        localStorage.setItem('guest_id', hostGuestId)
+        localStorage.setItem('username', hostUsername)
+        
         cy.visit(`/lobby/${roomCode}`)
         cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
         cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
@@ -238,6 +263,10 @@ describe('Phase 2: Game Start', () => {
         const roomCode = code.trim()
         cy.wait(2000)
         
+        // Store host credentials
+        const hostGuestId = localStorage.getItem('guest_id')
+        const hostUsername = localStorage.getItem('username')
+        
         // Add second player
         cy.clearLocalStorage()
         cy.visit('/')
@@ -251,8 +280,10 @@ describe('Phase 2: Game Start', () => {
         cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
         cy.wait(1000)
         
-        // Start game
-        cy.clearLocalStorage()
+        // Start game - restore host session
+        localStorage.setItem('guest_id', hostGuestId)
+        localStorage.setItem('username', hostUsername)
+        
         cy.visit(`/lobby/${roomCode}`)
         cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
         cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
