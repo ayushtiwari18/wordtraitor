@@ -3,8 +3,8 @@ describe('Phase 2: Guest Identity System', () => {
     // Clear localStorage before each test
     cy.clearLocalStorage()
     cy.visit('/')
-    // Wait for React useEffect to initialize guest
-    cy.wait(300)
+    // Wait for guest initialization to complete
+    cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
   })
 
   describe('TC010: Guest ID generated on first visit', () => {
@@ -57,7 +57,7 @@ describe('Phase 2: Guest Identity System', () => {
 
       // Reload page
       cy.reload()
-      cy.wait(300) // Wait for initialization
+      cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
 
       // Check guest ID is the same
       cy.window().then((win) => {
@@ -77,7 +77,7 @@ describe('Phase 2: Guest Identity System', () => {
       // Navigate away and back
       cy.visit('https://example.com')
       cy.visit('/')
-      cy.wait(300) // Wait for initialization
+      cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
 
       // Check guest ID hasn't changed
       cy.window().then((win) => {
@@ -94,11 +94,12 @@ describe('Phase 2: Guest Identity System', () => {
       // Set a custom guest ID
       cy.window().then((win) => {
         win.localStorage.setItem('guestId', customGuestId)
+        win.localStorage.setItem('guestUsername', 'TestPlayer')
       })
 
       // Reload to trigger initialization
       cy.reload()
-      cy.wait(300)
+      cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
 
       // Check it uses the existing ID
       cy.window().then((win) => {
@@ -119,7 +120,7 @@ describe('Phase 2: Guest Identity System', () => {
 
       // Reload page
       cy.reload()
-      cy.wait(300)
+      cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
 
       // Check ID hasn't changed
       cy.window().then((win) => {
@@ -163,7 +164,7 @@ describe('Phase 2: Guest Identity System', () => {
       })
 
       cy.reload()
-      cy.wait(300)
+      cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
 
       cy.window().then((win) => {
         const secondUsername = win.localStorage.getItem('guestUsername')
@@ -183,7 +184,7 @@ describe('Phase 2: Guest Identity System', () => {
 
       // Simulate new tab by clearing memory but keeping localStorage
       cy.reload()
-      cy.wait(300)
+      cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
 
       // Check it uses same ID
       cy.window().then((win) => {
@@ -203,7 +204,7 @@ describe('Phase 2: Guest Identity System', () => {
 
       // Second "tab" (reload)
       cy.reload()
-      cy.wait(300)
+      cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
       cy.window().then((win) => {
         secondId = win.localStorage.getItem('guestId')
       })
@@ -228,7 +229,7 @@ describe('Phase 2: Guest Identity System', () => {
 
       // Reload to trigger reinitialization
       cy.reload()
-      cy.wait(300)
+      cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
 
       // Should have generated new valid IDs
       cy.window().then((win) => {
@@ -253,7 +254,7 @@ describe('Phase 2: Guest Identity System', () => {
       // Clear and create new user
       cy.clearLocalStorage()
       cy.reload()
-      cy.wait(300)
+      cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 })
 
       // Get new ID
       cy.window().then((win) => {
