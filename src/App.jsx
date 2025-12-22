@@ -8,22 +8,26 @@ import useGameStore from './store/gameStore'
 
 function App() {
   const initializeGuest = useGameStore(state => state.initializeGuest)
+  const myUserId = useGameStore(state => state.myUserId)
 
   useEffect(() => {
     // Initialize guest ID ONCE on app start
+    console.log('🚀 App mounted, initializing guest...')
     initializeGuest()
-  }, [])
+  }, [initializeGuest])
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/lobby/:roomId" element={<Lobby />} />
-        <Route path="/game/:roomId" element={<Game />} />
-        <Route path="/results/:roomId" element={<Results />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <div data-testid="app-root" data-guest-initialized={!!myUserId}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/lobby/:roomId" element={<Lobby />} />
+          <Route path="/game/:roomId" element={<Game />} />
+          <Route path="/results/:roomId" element={<Results />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </div>
   )
 }
 
