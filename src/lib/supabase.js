@@ -25,8 +25,8 @@ export const supabase = supabaseUrl && supabaseAnonKey
           const controller = new AbortController()
           const timeout = setTimeout(() => {
             controller.abort()
-            console.error('❌ Request timeout after 10s')
-          }, 10000) // 10 second timeout
+            console.error('❌ Request timeout after 30s')
+          }, 30000) // 30 second timeout (increased from 10s)
           
           return fetch(resource, {
             ...config,
