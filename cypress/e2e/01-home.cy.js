@@ -157,12 +157,16 @@ describe('Phase 1: Home Page & Navigation', () => {
     it('should show phase timing inputs', () => {
       cy.contains('button', 'Create Room').click()
       cy.contains('button', 'Advanced Settings').click()
+      
+      // Check header is visible
       cy.contains('Phase Timings (seconds)').should('be.visible')
-      cy.contains('Whisper Phase').should('be.visible')
-      cy.contains('Hint Drop Phase').should('be.visible')
-      cy.contains('Debate Phase').should('be.visible')
-      cy.contains('Verdict Phase').should('be.visible')
-      cy.contains('Reveal Phase').should('be.visible')
+      
+      // Scroll each label into view before checking visibility
+      cy.contains('Whisper Phase').scrollIntoView().should('be.visible')
+      cy.contains('Hint Drop Phase').scrollIntoView().should('be.visible')
+      cy.contains('Debate Phase').scrollIntoView().should('be.visible')
+      cy.contains('Verdict Phase').scrollIntoView().should('be.visible')
+      cy.contains('Reveal Phase').scrollIntoView().should('be.visible')
     })
 
     it('should collapse advanced settings', () => {
