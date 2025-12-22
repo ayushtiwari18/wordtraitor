@@ -18,6 +18,21 @@ export const supabase = supabaseUrl && supabaseAnonKey
         params: {
           eventsPerSecond: 10
         }
+      },
+      global: {
+        fetch: (...args) => {
+          const [resource, config] = args
+          const controller = new AbortController()
+          const timeout = setTimeout(() => {
+            controller.abort()
+            console.error('❌ Request timeout after 10s')
+          }, 10000) // 10 second timeout
+          
+          return fetch(resource, {
+            ...config,
+            signal: controller.signal
+          }).finally(() => clearTimeout(timeout))
+        }
       }
     })
   : null
@@ -34,85 +49,111 @@ export const gameHelpers = {
     if (!supabase) throw new Error('Supabase not configured')
     
     const roomCode = generateRoomCode()
+    console.log('🎲 Generated room code:', roomCode)
     
-    const { data, error } = await supabase
-      .from('game_rooms')
-      .insert({
-        room_code: roomCode,
-        host_id: guestId,
-        game_mode: gameMode,
-        difficulty: difficulty,
-        word_pack: wordPack,
-        status: 'LOBBY',
-        custom_timings: customSettings.timings || null,
-        traitor_count: customSettings.traitorCount || 1
-      })
-      .select()
-      .single()
-    
-    if (error) throw error
-    
-    // Add host as first participant
-    await supabase
-      .from('room_participants')
-      .insert({
-        room_id: data.id,
-        user_id: guestId,
-        username: username
-      })
-    
-    return data
+    try {
+      const { data, error } = await supabase
+        .from('game_rooms')
+        .insert({
+          room_code: roomCode,
+          host_id: guestId,
+          game_mode: gameMode,
+          difficulty: difficulty,
+          word_pack: wordPack,
+          status: 'LOBBY',
+          custom_timings: customSettings.timings || null,
+          traitor_count: customSettings.traitorCount || 1
+        })
+        .select()
+        .single()
+      
+      if (error) {
+        console.error('❌ Room creation error:', error)
+        throw error
+      }
+      
+      console.log('✅ Room created in DB:', data.id)
+      
+      // Add host as first participant
+      const { error: participantError } = await supabase
+        .from('room_participants')
+        .insert({
+          room_id: data.id,
+          user_id: guestId,
+          username: username
+        })
+      
+      if (participantError) {
+        console.error('❌ Participant add error:', participantError)
+        throw participantError
+      }
+      
+      console.log('✅ Host added as participant')
+      return data
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please try again')
+      }
+      throw error
+    }
   },
 
   // Join existing room
   joinRoom: async (roomCode, guestId, username) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    // Find room by code
-    const { data: room, error: roomError } = await supabase
-      .from('game_rooms')
-      .select('*')
-      .eq('room_code', roomCode.toUpperCase())
-      .eq('status', 'LOBBY')
-      .single()
-    
-    if (roomError) throw new Error('Room not found or already started')
-    
-    // Check if already joined
-    const { data: existing, error: existingError } = await supabase
-      .from('room_participants')
-      .select('user_id')
-      .eq('room_id', room.id)
-      .eq('user_id', guestId)
-    
-    if (existingError) throw existingError
-    
-    if (Array.isArray(existing) && existing.length > 0) {
-      console.log('Already in room, skipping join')
-      return { room, participant: existing[0] }
+    try {
+      // Find room by code
+      const { data: room, error: roomError } = await supabase
+        .from('game_rooms')
+        .select('*')
+        .eq('room_code', roomCode.toUpperCase())
+        .eq('status', 'LOBBY')
+        .single()
+      
+      if (roomError) throw new Error('Room not found or already started')
+      
+      // Check if already joined
+      const { data: existing, error: existingError } = await supabase
+        .from('room_participants')
+        .select('user_id')
+        .eq('room_id', room.id)
+        .eq('user_id', guestId)
+      
+      if (existingError) throw existingError
+      
+      if (Array.isArray(existing) && existing.length > 0) {
+        console.log('Already in room, skipping join')
+        return { room, participant: existing[0] }
+      }
+      
+      // Check player count
+      const { count } = await supabase
+        .from('room_participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('room_id', room.id)
+      
+      if (count >= room.max_players) throw new Error('Room is full')
+      
+      // Join room
+      const { data, error } = await supabase
+        .from('room_participants')
+        .insert({
+          room_id: room.id,
+          user_id: guestId,
+          username: username
+        })
+        .select()
+        .single()
+      
+      if (error) throw error
+      return { ...data, room }
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please try again')
+      }
+      throw error
     }
-    
-    // Check player count
-    const { count } = await supabase
-      .from('room_participants')
-      .select('*', { count: 'exact', head: true })
-      .eq('room_id', room.id)
-    
-    if (count >= room.max_players) throw new Error('Room is full')
-    
-    // Join room
-    const { data, error } = await supabase
-      .from('room_participants')
-      .insert({
-        room_id: room.id,
-        user_id: guestId,
-        username: username
-      })
-      .select()
-      .single()
-    
-    if (error) throw error
-    return { ...data, room }
   },
 
   // Auto-join room (used when loading existing room)
