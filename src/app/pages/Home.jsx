@@ -60,13 +60,12 @@ const Home = () => {
       setError('')
       setIsJoining(false)
       
-      // Small delay to ensure modal unmounts
+      // Navigate after small delay
+      console.log('⏳ Scheduling navigation...')
       setTimeout(() => {
-        if (isMountedRef.current) {
-          console.log('🚀 Navigating to:', `/lobby/${room.id}`)
-          navigate(`/lobby/${room.id}`)
-        }
-      }, 50)
+        console.log('🚀 Navigating to:', `/lobby/${room.id}`)
+        navigate(`/lobby/${room.id}`)
+      }, 100)
     } catch (err) {
       console.error('❌ Join error:', err)
       if (isMountedRef.current) {
@@ -103,7 +102,10 @@ const Home = () => {
       
       console.log('🎯 Room ID:', room.id)
       
-      if (!isMountedRef.current) return
+      if (!isMountedRef.current) {
+        console.log('⚠️ Component unmounted, skipping navigation')
+        return
+      }
       
       // Close modal and clear state
       setShowCreateModal(false)
@@ -111,13 +113,12 @@ const Home = () => {
       setShowAdvanced(false)
       setIsCreating(false)
       
-      // Small delay to ensure modal unmounts
+      // Navigate after small delay - NO isMountedRef check here
+      console.log('⏳ Scheduling navigation in 100ms...')
       setTimeout(() => {
-        if (isMountedRef.current) {
-          console.log('🚀 Navigating to:', `/lobby/${room.id}`)
-          navigate(`/lobby/${room.id}`)
-        }
-      }, 50)
+        console.log('🚀 Navigating to:', `/lobby/${room.id}`)
+        navigate(`/lobby/${room.id}`)
+      }, 100)
       
     } catch (err) {
       console.error('❌ Create error:', err)
