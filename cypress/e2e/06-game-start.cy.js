@@ -37,47 +37,52 @@ describe('Phase 2: Game Start', () => {
       
       cy.get('[data-testid="room-code"]', { timeout: 30000 }).invoke('text').then((code) => {
         const roomCode = code.trim()
-        cy.wait(2000)
         
-        // Store host's guest ID before switching
-        const hostGuestId = localStorage.getItem('guest_id')
-        const hostUsername = localStorage.getItem('username')
-        
-        // Add second player
-        cy.clearLocalStorage()
-        cy.visit('/')
-        cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
-        cy.wait(500)
-        
-        cy.get('[data-testid="join-room-button"]').click()
-        cy.get('[data-testid="room-code-input"]').type(roomCode)
-        cy.get('[data-testid="join-button"]').click()
-        cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
-        
-        // Wait for participants to update
-        cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
-        cy.wait(1000)
-        
-        // Go back to host WITHOUT clearing localStorage (prevents 3rd player creation)
-        // Restore host's session
-        localStorage.setItem('guest_id', hostGuestId)
-        localStorage.setItem('username', hostUsername)
-        
-        cy.visit(`/lobby/${roomCode}`)
-        cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
-        cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
-        
-        // Wait for both participants to load
-        cy.get('[data-testid="participant-item"]', { timeout: 15000 }).should('have.length', 2)
-        
-        // Start button should now be enabled
-        cy.get('[data-testid="start-game-button"]', { timeout: 5000 }).should('not.be.disabled')
-        
-        // Click start
-        cy.get('[data-testid="start-game-button"]').click()
-        
-        // Should navigate to game page
-        cy.url({ timeout: 15000 }).should('include', '/game/')
+        // Capture host's credentials using Cypress localStorage API
+        cy.window().then((win) => {
+          const hostGuestId = win.localStorage.getItem('guest_id')
+          const hostUsername = win.localStorage.getItem('username')
+          
+          cy.wait(2000)
+          
+          // Add second player
+          cy.clearLocalStorage()
+          cy.visit('/')
+          cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
+          cy.wait(500)
+          
+          cy.get('[data-testid="join-room-button"]').click()
+          cy.get('[data-testid="room-code-input"]').type(roomCode)
+          cy.get('[data-testid="join-button"]').click()
+          cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
+          
+          // Wait for participants to update
+          cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
+          cy.wait(1000)
+          
+          // Restore host session properly
+          cy.clearLocalStorage()
+          cy.window().then((win) => {
+            win.localStorage.setItem('guest_id', hostGuestId)
+            win.localStorage.setItem('username', hostUsername)
+          })
+          
+          cy.visit(`/lobby/${roomCode}`)
+          cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
+          cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
+          
+          // Wait for both participants to load
+          cy.get('[data-testid="participant-item"]', { timeout: 15000 }).should('have.length', 2)
+          
+          // Start button should now be enabled
+          cy.get('[data-testid="start-game-button"]', { timeout: 5000 }).should('not.be.disabled')
+          
+          // Click start
+          cy.get('[data-testid="start-game-button"]').click()
+          
+          // Should navigate to game page
+          cy.url({ timeout: 15000 }).should('include', '/game/')
+        })
       })
     })
 
@@ -120,39 +125,44 @@ describe('Phase 2: Game Start', () => {
       
       cy.get('[data-testid="room-code"]', { timeout: 30000 }).invoke('text').then((code) => {
         const roomCode = code.trim()
-        cy.wait(2000)
         
-        // Store host credentials
-        const hostGuestId = localStorage.getItem('guest_id')
-        const hostUsername = localStorage.getItem('username')
-        
-        // Add second player
-        cy.clearLocalStorage()
-        cy.visit('/')
-        cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
-        cy.wait(500)
-        
-        cy.get('[data-testid="join-room-button"]').click()
-        cy.get('[data-testid="room-code-input"]').type(roomCode)
-        cy.get('[data-testid="join-button"]').click()
-        cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
-        cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
-        cy.wait(1000)
-        
-        // Go back to host - restore session instead of creating new player
-        localStorage.setItem('guest_id', hostGuestId)
-        localStorage.setItem('username', hostUsername)
-        
-        cy.visit(`/lobby/${roomCode}`)
-        cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
-        cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
-        cy.get('[data-testid="participant-item"]', { timeout: 15000 }).should('have.length', 2)
-        
-        cy.get('[data-testid="start-game-button"]', { timeout: 5000 }).click()
-        cy.url({ timeout: 15000 }).should('include', '/game/')
-        
-        // Verify game URL contains room code
-        cy.url().should('include', roomCode)
+        cy.window().then((win) => {
+          const hostGuestId = win.localStorage.getItem('guest_id')
+          const hostUsername = win.localStorage.getItem('username')
+          
+          cy.wait(2000)
+          
+          // Add second player
+          cy.clearLocalStorage()
+          cy.visit('/')
+          cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
+          cy.wait(500)
+          
+          cy.get('[data-testid="join-room-button"]').click()
+          cy.get('[data-testid="room-code-input"]').type(roomCode)
+          cy.get('[data-testid="join-button"]').click()
+          cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
+          cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
+          cy.wait(1000)
+          
+          // Go back to host - restore session
+          cy.clearLocalStorage()
+          cy.window().then((win) => {
+            win.localStorage.setItem('guest_id', hostGuestId)
+            win.localStorage.setItem('username', hostUsername)
+          })
+          
+          cy.visit(`/lobby/${roomCode}`)
+          cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
+          cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
+          cy.get('[data-testid="participant-item"]', { timeout: 15000 }).should('have.length', 2)
+          
+          cy.get('[data-testid="start-game-button"]', { timeout: 5000 }).click()
+          cy.url({ timeout: 15000 }).should('include', '/game/')
+          
+          // Verify game URL contains room code
+          cy.url().should('include', roomCode)
+        })
       })
     })
 
@@ -163,47 +173,52 @@ describe('Phase 2: Game Start', () => {
       
       cy.get('[data-testid="room-code"]', { timeout: 30000 }).invoke('text').then((code) => {
         const roomCode = code.trim()
-        cy.wait(2000)
         
-        // Store host credentials
-        const hostGuestId = localStorage.getItem('guest_id')
-        const hostUsername = localStorage.getItem('username')
-        
-        // Add second player
-        cy.clearLocalStorage()
-        cy.visit('/')
-        cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
-        cy.wait(500)
-        
-        cy.get('[data-testid="join-room-button"]').click()
-        cy.get('[data-testid="room-code-input"]').type(roomCode)
-        cy.get('[data-testid="join-button"]').click()
-        cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
-        cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
-        cy.wait(1000)
-        
-        // Start game as host - restore session
-        localStorage.setItem('guest_id', hostGuestId)
-        localStorage.setItem('username', hostUsername)
-        
-        cy.visit(`/lobby/${roomCode}`)
-        cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
-        cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
-        cy.get('[data-testid="participant-item"]', { timeout: 15000 }).should('have.length', 2)
-        
-        cy.get('[data-testid="start-game-button"]', { timeout: 5000 }).click()
-        cy.url({ timeout: 15000 }).should('include', '/game/')
-        
-        // In Whisper phase, should see role
-        cy.get('[data-testid="player-role"]', { timeout: 20000 }).should('exist')
-        cy.get('[data-testid="player-role"]').invoke('text').then((role) => {
-          // Role should be either "Citizen" or "Traitor"
-          expect(role).to.match(/Citizen|Traitor/)
+        cy.window().then((win) => {
+          const hostGuestId = win.localStorage.getItem('guest_id')
+          const hostUsername = win.localStorage.getItem('username')
+          
+          cy.wait(2000)
+          
+          // Add second player
+          cy.clearLocalStorage()
+          cy.visit('/')
+          cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
+          cy.wait(500)
+          
+          cy.get('[data-testid="join-room-button"]').click()
+          cy.get('[data-testid="room-code-input"]').type(roomCode)
+          cy.get('[data-testid="join-button"]').click()
+          cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
+          cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
+          cy.wait(1000)
+          
+          // Start game as host - restore session
+          cy.clearLocalStorage()
+          cy.window().then((win) => {
+            win.localStorage.setItem('guest_id', hostGuestId)
+            win.localStorage.setItem('username', hostUsername)
+          })
+          
+          cy.visit(`/lobby/${roomCode}`)
+          cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
+          cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
+          cy.get('[data-testid="participant-item"]', { timeout: 15000 }).should('have.length', 2)
+          
+          cy.get('[data-testid="start-game-button"]', { timeout: 5000 }).click()
+          cy.url({ timeout: 15000 }).should('include', '/game/')
+          
+          // In Whisper phase, should see role
+          cy.get('[data-testid="player-role"]', { timeout: 20000 }).should('exist')
+          cy.get('[data-testid="player-role"]').invoke('text').then((role) => {
+            // Role should be either "Citizen" or "Traitor"
+            expect(role).to.match(/Citizen|Traitor/)
+          })
+          
+          // Should see secret word
+          cy.get('[data-testid="secret-word"]', { timeout: 5000 }).should('exist')
+          cy.get('[data-testid="secret-word"]').should('not.be.empty')
         })
-        
-        // Should see secret word
-        cy.get('[data-testid="secret-word"]', { timeout: 5000 }).should('exist')
-        cy.get('[data-testid="secret-word"]').should('not.be.empty')
       })
     })
 
@@ -215,41 +230,46 @@ describe('Phase 2: Game Start', () => {
       
       cy.get('[data-testid="room-code"]', { timeout: 30000 }).invoke('text').then((code) => {
         const roomCode = code.trim()
-        cy.wait(2000)
         
-        // Store host credentials
-        const hostGuestId = localStorage.getItem('guest_id')
-        const hostUsername = localStorage.getItem('username')
-        
-        // Add second player
-        cy.clearLocalStorage()
-        cy.visit('/')
-        cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
-        cy.wait(500)
-        
-        cy.get('[data-testid="join-room-button"]').click()
-        cy.get('[data-testid="room-code-input"]').type(roomCode)
-        cy.get('[data-testid="join-button"]').click()
-        cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
-        cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
-        cy.wait(1000)
-        
-        // Start game - restore host session
-        localStorage.setItem('guest_id', hostGuestId)
-        localStorage.setItem('username', hostUsername)
-        
-        cy.visit(`/lobby/${roomCode}`)
-        cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
-        cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
-        cy.get('[data-testid="participant-item"]', { timeout: 15000 }).should('have.length', 2)
-        
-        cy.get('[data-testid="start-game-button"]', { timeout: 5000 }).click()
-        cy.url({ timeout: 15000 }).should('include', '/game/')
-        
-        // Verify difficulty is shown (optional - depends on UI)
-        // At minimum, word should be assigned
-        cy.get('[data-testid="secret-word"]', { timeout: 20000 }).should('exist')
-        cy.get('[data-testid="secret-word"]').should('not.be.empty')
+        cy.window().then((win) => {
+          const hostGuestId = win.localStorage.getItem('guest_id')
+          const hostUsername = win.localStorage.getItem('username')
+          
+          cy.wait(2000)
+          
+          // Add second player
+          cy.clearLocalStorage()
+          cy.visit('/')
+          cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
+          cy.wait(500)
+          
+          cy.get('[data-testid="join-room-button"]').click()
+          cy.get('[data-testid="room-code-input"]').type(roomCode)
+          cy.get('[data-testid="join-button"]').click()
+          cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
+          cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
+          cy.wait(1000)
+          
+          // Start game - restore host session
+          cy.clearLocalStorage()
+          cy.window().then((win) => {
+            win.localStorage.setItem('guest_id', hostGuestId)
+            win.localStorage.setItem('username', hostUsername)
+          })
+          
+          cy.visit(`/lobby/${roomCode}`)
+          cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
+          cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
+          cy.get('[data-testid="participant-item"]', { timeout: 15000 }).should('have.length', 2)
+          
+          cy.get('[data-testid="start-game-button"]', { timeout: 5000 }).click()
+          cy.url({ timeout: 15000 }).should('include', '/game/')
+          
+          // Verify difficulty is shown (optional - depends on UI)
+          // At minimum, word should be assigned
+          cy.get('[data-testid="secret-word"]', { timeout: 20000 }).should('exist')
+          cy.get('[data-testid="secret-word"]').should('not.be.empty')
+        })
       })
     })
 
@@ -261,44 +281,49 @@ describe('Phase 2: Game Start', () => {
       
       cy.get('[data-testid="room-code"]', { timeout: 30000 }).invoke('text').then((code) => {
         const roomCode = code.trim()
-        cy.wait(2000)
         
-        // Store host credentials
-        const hostGuestId = localStorage.getItem('guest_id')
-        const hostUsername = localStorage.getItem('username')
-        
-        // Add second player
-        cy.clearLocalStorage()
-        cy.visit('/')
-        cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
-        cy.wait(500)
-        
-        cy.get('[data-testid="join-room-button"]').click()
-        cy.get('[data-testid="room-code-input"]').type(roomCode)
-        cy.get('[data-testid="join-button"]').click()
-        cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
-        cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
-        cy.wait(1000)
-        
-        // Start game - restore host session
-        localStorage.setItem('guest_id', hostGuestId)
-        localStorage.setItem('username', hostUsername)
-        
-        cy.visit(`/lobby/${roomCode}`)
-        cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
-        cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
-        cy.get('[data-testid="participant-item"]', { timeout: 15000 }).should('have.length', 2)
-        
-        cy.get('[data-testid="start-game-button"]', { timeout: 5000 }).click()
-        cy.url({ timeout: 15000 }).should('include', '/game/')
-        
-        // Wait for Whisper phase to end (30 seconds default)
-        // Then check for turn indicator in Hint Drop phase
-        cy.wait(32000) // Wait for Whisper phase
-        
-        // Should now be in Hint Drop phase
-        // Turn indicator should exist
-        cy.get('[data-testid="turn-indicator"]', { timeout: 10000 }).should('exist')
+        cy.window().then((win) => {
+          const hostGuestId = win.localStorage.getItem('guest_id')
+          const hostUsername = win.localStorage.getItem('username')
+          
+          cy.wait(2000)
+          
+          // Add second player
+          cy.clearLocalStorage()
+          cy.visit('/')
+          cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
+          cy.wait(500)
+          
+          cy.get('[data-testid="join-room-button"]').click()
+          cy.get('[data-testid="room-code-input"]').type(roomCode)
+          cy.get('[data-testid="join-button"]').click()
+          cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
+          cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
+          cy.wait(1000)
+          
+          // Start game - restore host session
+          cy.clearLocalStorage()
+          cy.window().then((win) => {
+            win.localStorage.setItem('guest_id', hostGuestId)
+            win.localStorage.setItem('username', hostUsername)
+          })
+          
+          cy.visit(`/lobby/${roomCode}`)
+          cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 10000 }).should('exist')
+          cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
+          cy.get('[data-testid="participant-item"]', { timeout: 15000 }).should('have.length', 2)
+          
+          cy.get('[data-testid="start-game-button"]', { timeout: 5000 }).click()
+          cy.url({ timeout: 15000 }).should('include', '/game/')
+          
+          // Wait for Whisper phase to end (30 seconds default)
+          // Then check for turn indicator in Hint Drop phase
+          cy.wait(32000) // Wait for Whisper phase
+          
+          // Should now be in Hint Drop phase
+          // Turn indicator should exist
+          cy.get('[data-testid="turn-indicator"]', { timeout: 10000 }).should('exist')
+        })
       })
     })
   })
