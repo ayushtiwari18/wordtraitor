@@ -9,8 +9,9 @@ describe('Phase 2: Lobby & Settings', () => {
   })
 
   // Add delay after each test to avoid Supabase rate limits
+  // Increased to 5s for better reliability (was 3s, gave 50% pass rate)
   afterEach(() => {
-    cy.wait(3000) // 3 second cool-down between tests
+    cy.wait(5000) // 5 second cool-down between tests
   })
 
   describe('TC040-048: Lobby Display', () => {
