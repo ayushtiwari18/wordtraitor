@@ -52,19 +52,19 @@ const Home = () => {
       const room = await joinRoom(roomCode.toUpperCase())
       console.log('✅ Room joined:', room.id)
       
-      // Check if still mounted before state updates
       if (!isMountedRef.current) return
       
-      // Close modal FIRST (this triggers AnimatePresence exit)
+      // Close modal and clear state
       setShowJoinModal(false)
-      
-      // Then clear state and navigate
       setRoomCode('')
       setError('')
       setIsJoining(false)
       
-      console.log('🚀 Navigating to:', `/lobby/${room.id}`)
-      navigate(`/lobby/${room.id}`)
+      // Wait for DOM update then navigate
+      requestAnimationFrame(() => {
+        console.log('🚀 Navigating to:', `/lobby/${room.id}`)
+        navigate(`/lobby/${room.id}`)
+      })
     } catch (err) {
       console.error('❌ Join error:', err)
       if (isMountedRef.current) {
@@ -80,7 +80,6 @@ const Home = () => {
     setIsCreating(true)
 
     try {
-      // Prepare custom settings
       const customSettings = {
         traitorCount,
         timings: {
@@ -102,19 +101,19 @@ const Home = () => {
       
       console.log('🎯 Room ID:', room.id)
       
-      // Check if still mounted before state updates
       if (!isMountedRef.current) return
       
-      // Close modal FIRST (this triggers AnimatePresence exit)
+      // Close modal and clear state
       setShowCreateModal(false)
-      
-      // Then clear state
       setError('')
       setShowAdvanced(false)
       setIsCreating(false)
       
-      console.log('🚀 Navigating to:', `/lobby/${room.id}`)
-      navigate(`/lobby/${room.id}`)
+      // Wait for DOM update then navigate
+      requestAnimationFrame(() => {
+        console.log('🚀 Navigating to:', `/lobby/${room.id}`)
+        navigate(`/lobby/${room.id}`)
+      })
       
     } catch (err) {
       console.error('❌ Create error:', err)
@@ -161,7 +160,6 @@ const Home = () => {
 
         {/* Main Actions */}
         <div className="grid md:grid-cols-2 gap-6 mb-12">
-          {/* Create Room */}
           <motion.button
             data-testid="create-room-button"
             initial={{ opacity: 0, x: -20 }}
@@ -176,7 +174,6 @@ const Home = () => {
             <p className="text-purple-100">Start a new game with friends</p>
           </motion.button>
 
-          {/* Join Room */}
           <motion.button
             data-testid="join-room-button"
             initial={{ opacity: 0, x: 20 }}
@@ -233,23 +230,13 @@ const Home = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                setShowJoinModal(false)
-                setRoomCode('')
-                setError('')
-              }
-            }}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.2 }}
               className="bg-gray-800 border-2 border-gray-700 rounded-2xl p-8 max-w-md w-full"
-              onClick={(e) => e.stopPropagation()}
             >
               <h2 className="text-2xl font-bold text-white mb-6">Join Room</h2>
               <form onSubmit={handleJoinRoom}>
@@ -305,27 +292,16 @@ const Home = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={(e) => {
-              if (e.target === e.currentTarget && !isCreating) {
-                setShowCreateModal(false)
-                setError('')
-                setShowAdvanced(false)
-              }
-            }}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.2 }}
               className="bg-gray-800 border-2 border-gray-700 rounded-2xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
             >
               <h2 className="text-2xl font-bold text-white mb-6">Create Room</h2>
               <form onSubmit={handleCreateRoom}>
-                {/* Game Mode */}
                 <div className="mb-4">
                   <label className="block text-gray-300 mb-2">Game Mode</label>
                   <select
@@ -339,7 +315,6 @@ const Home = () => {
                   </select>
                 </div>
 
-                {/* Difficulty */}
                 <div className="mb-4">
                   <label className="block text-gray-300 mb-2">Difficulty</label>
                   <select
@@ -354,7 +329,6 @@ const Home = () => {
                   </select>
                 </div>
 
-                {/* Word Pack */}
                 <div className="mb-4">
                   <label className="block text-gray-300 mb-2">Word Pack</label>
                   <select
@@ -372,7 +346,6 @@ const Home = () => {
                   </select>
                 </div>
 
-                {/* Advanced Settings Toggle */}
                 <button
                   type="button"
                   onClick={() => setShowAdvanced(!showAdvanced)}
@@ -385,7 +358,6 @@ const Home = () => {
                   {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
 
-                {/* Advanced Settings */}
                 <AnimatePresence>
                   {showAdvanced && (
                     <motion.div
@@ -396,7 +368,6 @@ const Home = () => {
                       className="overflow-hidden"
                     >
                       <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-4 space-y-4">
-                        {/* Traitor Count */}
                         <div>
                           <label className="block text-gray-300 mb-2 text-sm">
                             Number of Traitors (1-3)
@@ -411,7 +382,6 @@ const Home = () => {
                           />
                         </div>
 
-                        {/* Phase Timings */}
                         <div>
                           <p className="text-gray-300 text-sm font-semibold mb-2">Phase Timings (seconds)</p>
                           
