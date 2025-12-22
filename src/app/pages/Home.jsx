@@ -125,6 +125,7 @@ const Home = () => {
         <div className="grid md:grid-cols-2 gap-6 mb-12">
           {/* Create Room */}
           <motion.button
+            data-testid="create-room-button"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
@@ -139,6 +140,7 @@ const Home = () => {
 
           {/* Join Room */}
           <motion.button
+            data-testid="join-room-button"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
@@ -199,6 +201,7 @@ const Home = () => {
               <div className="mb-6">
                 <label className="block text-gray-300 mb-2">Room Code</label>
                 <input
+                  data-testid="room-code-input"
                   type="text"
                   value={roomCode}
                   onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
@@ -209,7 +212,7 @@ const Home = () => {
                 />
               </div>
               {error && (
-                <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400 text-sm">
+                <div data-testid="error-message" className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400 text-sm">
                   {error}
                 </div>
               )}
@@ -226,6 +229,7 @@ const Home = () => {
                   Cancel
                 </button>
                 <button
+                  data-testid="join-button"
                   type="submit"
                   disabled={isJoining || !roomCode.trim()}
                   className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-colors"
@@ -252,6 +256,7 @@ const Home = () => {
               <div className="mb-4">
                 <label className="block text-gray-300 mb-2">Game Mode</label>
                 <select
+                  data-testid="game-mode-selector"
                   value={gameMode}
                   onChange={(e) => setGameMode(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500"
@@ -265,6 +270,7 @@ const Home = () => {
               <div className="mb-4">
                 <label className="block text-gray-300 mb-2">Difficulty</label>
                 <select
+                  data-testid="difficulty-selector"
                   value={difficulty}
                   onChange={(e) => setDifficulty(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500"
@@ -279,6 +285,7 @@ const Home = () => {
               <div className="mb-4">
                 <label className="block text-gray-300 mb-2">Word Pack</label>
                 <select
+                  data-testid="wordpack-selector"
                   value={wordPack}
                   onChange={(e) => setWordPack(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500"
@@ -403,7 +410,7 @@ const Home = () => {
               </AnimatePresence>
 
               {error && (
-                <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400 text-sm">
+                <div data-testid="error-message" className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400 text-sm">
                   {error}
                 </div>
               )}
@@ -421,6 +428,7 @@ const Home = () => {
                   Cancel
                 </button>
                 <button
+                  data-testid="create-submit-button"
                   type="submit"
                   disabled={isCreating}
                   className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-colors"
