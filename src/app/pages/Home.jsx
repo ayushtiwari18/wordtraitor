@@ -44,10 +44,7 @@ const Home = () => {
       const room = await joinRoom(roomCode.toUpperCase())
       console.log('✅ Room joined, navigating to:', `/lobby/${room.id}`)
       
-      // Close modal first
-      setShowJoinModal(false)
-      
-      // Navigate
+      // Navigate immediately - no setTimeout
       navigate(`/lobby/${room.id}`)
     } catch (err) {
       console.error('❌ Join error:', err)
@@ -85,15 +82,9 @@ const Home = () => {
       
       console.log('🧠 Room ID:', room.id)
       
-      // CRITICAL: Close modal BEFORE navigation
-      setShowCreateModal(false)
-      setIsCreating(false)
-      
-      // Small delay to ensure modal closes
-      setTimeout(() => {
-        console.log('📦 Navigating to:', `/lobby/${room.id}`)
-        navigate(`/lobby/${room.id}`)
-      }, 100)
+      // Navigate immediately - no setTimeout
+      console.log('📦 Navigating to:', `/lobby/${room.id}`)
+      navigate(`/lobby/${room.id}`)
       
     } catch (err) {
       console.error('❌ Create error:', err)
