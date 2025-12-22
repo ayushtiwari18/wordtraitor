@@ -142,6 +142,7 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+  // FIX: Updated to match new joinRoom return format (direct room object)
   joinRoom: async (roomCode) => {
     console.log('🚪 Joining room:', roomCode)
     set({ isLoading: true, error: null })
@@ -149,28 +150,23 @@ const useGameStore = create((set, get) => ({
     try {
       const { guestId, guestUsername } = get().initializeGuest()
       
-      const result = await gameHelpers.joinRoom(roomCode, guestId, guestUsername)
-      console.log('✅ Joined room - Result:', result)
+      // FIX: joinRoom now returns room directly (not { room: {...} })
+      const room = await gameHelpers.joinRoom(roomCode, guestId, guestUsername)
+      console.log('✅ Joined room - Direct room object:', room)
       
-      // CRITICAL: Validate the result has room property
-      if (!result || !result.room || !result.room.id) {
-        console.error('❌ Invalid join result:', result)
+      // FIX: Validate direct room object
+      if (!room || !room.id || !room.room_code) {
+        console.error('❌ Invalid join result:', room)
         throw new Error('Join room returned invalid data')
       }
       
-      console.log('✅ Room ID from join:', result.room.id)
+      console.log('✅ Room ID from join:', room.id)
+      console.log('✅ Room code from join:', room.room_code)
       
-      // Fetch full room details
-      const room = await gameHelpers.getRoom(result.room.id)
-      const participants = await gameHelpers.getParticipants(result.room.id)
+      // Fetch participants using room.id (not result.room.id)
+      const participants = await gameHelpers.getParticipants(room.id)
       console.log('👥 Participants after join:', participants.length)
       console.log('⚙️ Room settings:', room.custom_timings, 'traitors:', room.traitor_count)
-      
-      // Validate room object again
-      if (!room || !room.id) {
-        console.error('❌ Invalid room object after fetch:', room)
-        throw new Error('Failed to fetch room details')
-      }
       
       set({ 
         room, 
@@ -185,7 +181,7 @@ const useGameStore = create((set, get) => ({
       // Start real-time subscription
       get().subscribeToRoom(room.id)
       
-      console.log('🎯 Returning room object with id:', room.id)
+      console.log('🎯 Returning room object with id:', room.id, 'code:', room.room_code)
       return room
     } catch (error) {
       console.error('❌ Error joining room:', error)
