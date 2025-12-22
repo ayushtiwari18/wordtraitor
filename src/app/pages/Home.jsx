@@ -57,21 +57,28 @@ const Home = () => {
         console.log(`🚪 Join attempt ${attempt}/3 - Room code:`, roomCode)
         const room = await joinRoom(roomCode.toUpperCase())
         
-        if (!room || !room.room_code) {
+        // CRITICAL: Validate room object
+        if (!room || !room.id || !room.room_code) {
           throw new Error('Invalid room data received from server')
         }
         
         console.log('✅ Room joined:', room.id, 'code:', room.room_code)
-        console.log('🚀 Navigating to:', `/lobby/${room.room_code}`)
+        const targetUrl = `/lobby/${room.room_code}`
+        console.log('🚀 Navigating to:', targetUrl)
         
-        // Direct navigation - no async wrapper
+        // FIX: Use replace option and wait for navigation to complete
         if (isMountedRef.current) {
-          navigate(`/lobby/${room.room_code}`)
-          // Clean up state
-          setShowJoinModal(false)
-          setRoomCode('')
-          setError('')
-          setIsJoining(false)
+          navigate(targetUrl, { replace: true })
+          
+          // CRITICAL: Wait for navigation to process before cleaning up state
+          await new Promise(resolve => setTimeout(resolve, 150))
+          
+          if (isMountedRef.current) {
+            setShowJoinModal(false)
+            setRoomCode('')
+            setError('')
+            setIsJoining(false)
+          }
           return
         }
         
@@ -126,22 +133,29 @@ const Home = () => {
         console.log(`🏠 Create attempt ${attempt}/3 - Settings:`, { gameMode, difficulty, wordPack })
         const room = await createRoom(gameMode, difficulty, wordPack, customSettings)
         
+        // CRITICAL: Validate room object
         if (!room || !room.id || !room.room_code) {
           throw new Error('Invalid room data received from server')
         }
         
         console.log('✅ Room created:', room)
         console.log('🎯 Room ID:', room.id, 'Room Code:', room.room_code)
-        console.log('🚀 Navigating to:', `/lobby/${room.room_code}`)
+        const targetUrl = `/lobby/${room.room_code}`
+        console.log('🚀 Navigating to:', targetUrl)
         
-        // Direct navigation - no async wrapper  
+        // FIX: Use replace option and wait for navigation to complete
         if (isMountedRef.current) {
-          navigate(`/lobby/${room.room_code}`)
-          // Clean up state
-          setShowCreateModal(false)
-          setError('')
-          setShowAdvanced(false)
-          setIsCreating(false)
+          navigate(targetUrl, { replace: true })
+          
+          // CRITICAL: Wait for navigation to process before cleaning up state
+          await new Promise(resolve => setTimeout(resolve, 150))
+          
+          if (isMountedRef.current) {
+            setShowCreateModal(false)
+            setError('')
+            setShowAdvanced(false)
+            setIsCreating(false)
+          }
           return
         }
         
