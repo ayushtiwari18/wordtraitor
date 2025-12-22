@@ -52,6 +52,7 @@ export const gameHelpers = {
           difficulty: difficulty,
           word_pack: wordPack,
           status: 'LOBBY',
+          max_players: 8, // FIX #2: Add default max_players
           custom_timings: customSettings.timings || null,
           traitor_count: customSettings.traitorCount || 1
         })
@@ -98,6 +99,7 @@ export const gameHelpers = {
   },
 
   // Join existing room with retry logic
+  // FIX #1: Return room directly, not wrapped object
   joinRoom: async (roomCode, guestId, username) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -127,7 +129,8 @@ export const gameHelpers = {
         
         if (Array.isArray(existing) && existing.length > 0) {
           console.log('Already in room, skipping join')
-          return { room, participant: existing[0] }
+          // FIX #1: Return room directly (not wrapped)
+          return room
         }
         
         // Check player count
@@ -136,21 +139,24 @@ export const gameHelpers = {
           .select('*', { count: 'exact', head: true })
           .eq('room_id', room.id)
         
-        if (count >= room.max_players) throw new Error('Room is full')
+        // FIX #2: Null-safe max_players check
+        if (room.max_players && count >= room.max_players) {
+          throw new Error('Room is full')
+        }
         
         // Join room
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('room_participants')
           .insert({
             room_id: room.id,
             user_id: guestId,
             username: username
           })
-          .select()
-          .single()
         
         if (error) throw error
-        return { ...data, room }
+        
+        // FIX #1: Return room directly (matches createRoom format)
+        return room
         
       } catch (error) {
         // Retry on network errors
@@ -200,7 +206,8 @@ export const gameHelpers = {
       .select('*', { count: 'exact', head: true })
       .eq('room_id', roomId)
     
-    if (count >= room.max_players) {
+    // FIX #3: Null-safe max_players check in autoJoinRoom too
+    if (room.max_players && count >= room.max_players) {
       throw new Error('Room is full')
     }
     
