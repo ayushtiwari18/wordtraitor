@@ -192,8 +192,9 @@ const useGameStore = create((set, get) => ({
     }
   },
 
-  loadRoom: async (roomIdOrCode) => {
-    console.log('📥 Loading room:', roomIdOrCode)
+  loadRoom: async (roomIdOrCode, options = {}) => {
+    const { force = false } = options
+    console.log('📥 Loading room:', roomIdOrCode, force ? '(forced)' : '')
     set({ isLoading: true, error: null })
     
     try {
@@ -204,9 +205,9 @@ const useGameStore = create((set, get) => ({
       const room = await gameHelpers.getRoom(roomIdOrCode)
       console.log('🎮 Room loaded:', room.room_code, 'Status:', room.status, 'UUID:', room.id)
       
-      // CRITICAL: Check if already loaded this exact room by UUID
+      // CRITICAL: Check if already loaded this exact room by UUID (unless forced)
       const { roomId: currentRoomId, realtimeChannel } = get()
-      if (currentRoomId === room.id && realtimeChannel) {
+      if (!force && currentRoomId === room.id && realtimeChannel) {
         console.log('⏭️ Room already loaded by UUID, skipping')
         set({ isLoading: false })
         return room
