@@ -18,6 +18,12 @@ export const supabase = supabaseUrl && supabaseAnonKey
         params: {
           eventsPerSecond: 10
         }
+      },
+      // Add global timeout
+      global: {
+        headers: {
+          'x-client-info': 'wordtraitor-web'
+        }
       }
     })
   : null
@@ -33,6 +39,16 @@ function isUUID(str) {
   return uuidRegex.test(str)
 }
 
+// Helper: Add timeout to promises
+function withTimeout(promise, timeoutMs = 10000, operationName = 'Operation') {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => 
+      setTimeout(() => reject(new Error(`${operationName} timed out after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ])
+}
+
 // Game room helpers for anonymous users
 export const gameHelpers = {
   // Create room with guest ID and custom settings
@@ -41,9 +57,15 @@ export const gameHelpers = {
     
     const roomCode = generateRoomCode()
     console.log('🎲 Generated room code:', roomCode)
+    console.log('👤 Creating room for:', username, '(', guestId.slice(0, 15), '...)')
+    console.log('⚙️ Settings:', { gameMode, difficulty, wordPack, traitorCount: customSettings.traitorCount || 1 })
     
     try {
-      const { data, error } = await supabase
+      // STEP 1: Insert room record
+      const startTime = Date.now()
+      console.log('⏱️ [1/2] Inserting into game_rooms table...')
+      
+      const roomInsertPromise = supabase
         .from('game_rooms')
         .insert({
           room_code: roomCode,
@@ -59,6 +81,15 @@ export const gameHelpers = {
         .select()
         .single()
       
+      const { data, error } = await withTimeout(
+        roomInsertPromise, 
+        10000, 
+        'Room creation (game_rooms insert)'
+      )
+      
+      const elapsed1 = Date.now() - startTime
+      console.log(`✅ [1/2] Room record created in ${elapsed1}ms - ID: ${data?.id?.slice(0, 8)}...`)
+      
       if (error) {
         console.error('❌ Room creation error:')
         console.error('  Message:', error.message)
@@ -69,16 +100,26 @@ export const gameHelpers = {
         throw error
       }
       
-      console.log('✅ Room created in DB:', data.id)
+      // STEP 2: Add host as participant
+      const startTime2 = Date.now()
+      console.log('⏱️ [2/2] Adding host to room_participants table...')
       
-      // Add host as first participant
-      const { error: participantError } = await supabase
+      const participantInsertPromise = supabase
         .from('room_participants')
         .insert({
           room_id: data.id,
           user_id: guestId,
           username: username
         })
+      
+      const { error: participantError } = await withTimeout(
+        participantInsertPromise,
+        10000,
+        'Add participant (room_participants insert)'
+      )
+      
+      const elapsed2 = Date.now() - startTime2
+      console.log(`✅ [2/2] Host added to participants in ${elapsed2}ms`)
       
       if (participantError) {
         console.error('❌ Participant add error:')
@@ -88,11 +129,19 @@ export const gameHelpers = {
         throw participantError
       }
       
-      console.log('✅ Host added as participant')
+      const totalTime = Date.now() - startTime
+      console.log(`🎉 Room creation complete in ${totalTime}ms total`)
+      console.log('📋 Room details:', { id: data.id, room_code: data.room_code, host_id: data.host_id })
+      
       return data
     } catch (error) {
-      if (error.name === 'AbortError') {
-        throw new Error('Request timeout - please try again')
+      console.error('💥 FATAL: Room creation failed')
+      console.error('   Error name:', error.name)
+      console.error('   Error message:', error.message)
+      console.error('   Stack:', error.stack)
+      
+      if (error.name === 'AbortError' || error.message.includes('timed out')) {
+        throw new Error('Database timeout - please check your connection and try again')
       }
       throw error
     }
