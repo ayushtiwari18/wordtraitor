@@ -1,13 +1,21 @@
 import { create } from 'zustand'
 import { supabase, gameHelpers, realtimeHelpers } from '../lib/supabase'
 
-// Game phases with durations (in seconds)
+// Default game phases with durations (in seconds)
+export const DEFAULT_PHASE_DURATIONS = {
+  WHISPER: 30,
+  HINT_DROP: 60,
+  DEBATE: 120,
+  VERDICT: 45,
+  REVEAL: 15
+}
+
 export const GAME_PHASES = {
-  WHISPER: { name: 'WHISPER', duration: 30, next: 'HINT_DROP' },
-  HINT_DROP: { name: 'HINT_DROP', duration: 60, next: 'DEBATE' },
-  DEBATE: { name: 'DEBATE', duration: 120, next: 'VERDICT' },
-  VERDICT: { name: 'VERDICT', duration: 45, next: 'REVEAL' },
-  REVEAL: { name: 'REVEAL', duration: 15, next: null }
+  WHISPER: { name: 'WHISPER', next: 'HINT_DROP' },
+  HINT_DROP: { name: 'HINT_DROP', next: 'DEBATE' },
+  DEBATE: { name: 'DEBATE', next: 'VERDICT' },
+  VERDICT: { name: 'VERDICT', next: 'REVEAL' },
+  REVEAL: { name: 'REVEAL', next: null }
 }
 
 const useGameStore = create((set, get) => ({
@@ -27,6 +35,17 @@ const useGameStore = create((set, get) => ({
   hints: [],
   votes: [],
   eliminated: [],
+  
+  // New: Custom settings
+  customTimings: null,
+  traitorCount: 1,
+  
+  // New: Turn-based hints
+  currentTurnIndex: 0,
+  turnOrder: [], // Array of user_ids in turn order
+  
+  // New: Chat messages
+  chatMessages: [],
   
   // Real-time
   realtimeChannel: null,
@@ -66,15 +85,16 @@ const useGameStore = create((set, get) => ({
   // ROOM MANAGEMENT
   // ==========================================
   
-  createRoom: async (gameMode, difficulty, wordPack) => {
+  createRoom: async (gameMode, difficulty, wordPack, customSettings = {}) => {
     console.log('🏠 Creating room...')
     set({ isLoading: true, error: null })
     
     try {
       const { guestId, guestUsername } = get().initializeGuest()
       
-      const room = await gameHelpers.createRoom(guestId, guestUsername, gameMode, difficulty, wordPack)
+      const room = await gameHelpers.createRoom(guestId, guestUsername, gameMode, difficulty, wordPack, customSettings)
       console.log('✅ Room created:', room.room_code)
+      console.log('⚙️ Custom settings:', room.custom_timings, 'traitors:', room.traitor_count)
       
       // Fetch participants immediately after creation
       const participants = await gameHelpers.getParticipants(room.id)
@@ -85,6 +105,8 @@ const useGameStore = create((set, get) => ({
         roomId: room.id,
         participants,
         isHost: true,
+        customTimings: room.custom_timings,
+        traitorCount: room.traitor_count || 1,
         isLoading: false
       })
       
@@ -113,12 +135,15 @@ const useGameStore = create((set, get) => ({
       const room = await gameHelpers.getRoom(result.room.id)
       const participants = await gameHelpers.getParticipants(result.room.id)
       console.log('👥 Participants after join:', participants.length)
+      console.log('⚙️ Room settings:', room.custom_timings, 'traitors:', room.traitor_count)
       
       set({ 
         room, 
         roomId: room.id,
         participants,
         isHost: false,
+        customTimings: room.custom_timings,
+        traitorCount: room.traitor_count || 1,
         isLoading: false
       })
       
@@ -174,6 +199,8 @@ const useGameStore = create((set, get) => ({
         room, 
         roomId,
         isHost: room.host_id === guestId,
+        customTimings: room.custom_timings,
+        traitorCount: room.traitor_count || 1,
         isLoading: false
       })
       
@@ -222,6 +249,11 @@ const useGameStore = create((set, get) => ({
         hints: [],
         votes: [],
         eliminated: [],
+        customTimings: null,
+        traitorCount: 1,
+        currentTurnIndex: 0,
+        turnOrder: [],
+        chatMessages: [],
         realtimeChannel: null,
         isConnected: false,
         showResults: false,
@@ -245,21 +277,21 @@ const useGameStore = create((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      const { roomId, participants } = get()
+      const { roomId, participants, room, traitorCount } = get()
       
       if (participants.length < 2) {
         throw new Error('Need at least 2 players to start')
       }
       
       console.log('🎲 Starting game with', participants.length, 'players')
+      console.log('🎭 Traitor count:', traitorCount)
       
       // Update room status
       await gameHelpers.startGame(roomId)
       console.log('✅ Room status updated to PLAYING')
       
-      // Assign roles and words
-      const { room } = get()
-      await gameHelpers.assignRoles(roomId, participants, room.difficulty, room.word_pack)
+      // Assign roles and words (with custom traitor count)
+      await gameHelpers.assignRoles(roomId, participants, room.difficulty, room.word_pack, traitorCount)
       console.log('✅ Roles assigned')
       
       // Load my secret
@@ -267,9 +299,15 @@ const useGameStore = create((set, get) => ({
       const mySecret = await gameHelpers.getMySecret(roomId, myUserId)
       console.log('📝 My role:', mySecret.role, '| Word:', mySecret.secret_word)
       
+      // Initialize turn order (alive players)
+      const turnOrder = participants.map(p => p.user_id)
+      console.log('🔄 Turn order initialized:', turnOrder.length, 'players')
+      
       set({ 
         mySecret,
         gamePhase: 'WHISPER',
+        turnOrder,
+        currentTurnIndex: 0,
         isLoading: false
       })
       
@@ -283,11 +321,20 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+  getPhaseD uration: (phaseName) => {
+    const { customTimings } = get()
+    if (customTimings && customTimings[phaseName]) {
+      return customTimings[phaseName]
+    }
+    return DEFAULT_PHASE_DURATIONS[phaseName] || 30
+  },
+
   startPhaseTimer: (phaseName) => {
     const phase = GAME_PHASES[phaseName]
     if (!phase) return
     
-    console.log(`⏰ Starting ${phaseName} phase (${phase.duration}s)`)
+    const duration = get().getPhaseDuration(phaseName)
+    console.log(`⏰ Starting ${phaseName} phase (${duration}s)`)
     
     // Clear existing timer
     const { phaseInterval } = get()
@@ -295,7 +342,7 @@ const useGameStore = create((set, get) => ({
       clearInterval(phaseInterval)
     }
     
-    let timeLeft = phase.duration
+    let timeLeft = duration
     set({ phaseTimer: timeLeft })
     
     const interval = setInterval(() => {
@@ -328,6 +375,7 @@ const useGameStore = create((set, get) => ({
     // Load data for new phase
     if (currentPhase.next === 'DEBATE') {
       await get().loadHints()
+      await get().loadChatMessages()
     } else if (currentPhase.next === 'REVEAL') {
       await get().loadVotes()
     }
@@ -345,19 +393,70 @@ const useGameStore = create((set, get) => ({
   },
 
   // ==========================================
+  // TURN-BASED HINTS
+  // ==========================================
+  
+  getCurrentTurnPlayer: () => {
+    const { turnOrder, currentTurnIndex, participants } = get()
+    if (!turnOrder || turnOrder.length === 0) return null
+    
+    const currentUserId = turnOrder[currentTurnIndex]
+    return participants.find(p => p.user_id === currentUserId)
+  },
+  
+  isMyTurnToHint: () => {
+    const { turnOrder, currentTurnIndex, myUserId, gamePhase } = get()
+    if (gamePhase !== 'HINT_DROP') return false
+    if (!turnOrder || turnOrder.length === 0) return false
+    
+    const currentUserId = turnOrder[currentTurnIndex]
+    return currentUserId === myUserId
+  },
+  
+  advanceTurn: () => {
+    const { currentTurnIndex, turnOrder } = get()
+    const nextIndex = (currentTurnIndex + 1) % turnOrder.length
+    console.log(`🔄 Turn ${currentTurnIndex} -> ${nextIndex}`)
+    set({ currentTurnIndex: nextIndex })
+  },
+
+  // ==========================================
   // HINTS
   // ==========================================
   
   submitHint: async (hintText) => {
-    const { roomId, myUserId } = get()
+    const { roomId, myUserId, room } = get()
     console.log('💬 Submitting hint:', hintText)
     
     try {
       await gameHelpers.submitHint(roomId, myUserId, hintText)
       await get().loadHints()
+      
+      // Advance turn only in Silent Mode
+      if (room?.game_mode === 'SILENT') {
+        get().advanceTurn()
+      }
+      
       console.log('✅ Hint submitted')
     } catch (error) {
       console.error('❌ Error submitting hint:', error)
+      set({ error: error.message })
+      throw error
+    }
+  },
+  
+  submitRealModeNext: async () => {
+    const { roomId, myUserId } = get()
+    console.log('➡️ Real Mode: Marking hint as given verbally')
+    
+    try {
+      // Submit placeholder hint for Real Mode
+      await gameHelpers.submitHint(roomId, myUserId, '[VERBAL]')
+      await get().loadHints()
+      get().advanceTurn()
+      console.log('✅ Turn advanced')
+    } catch (error) {
+      console.error('❌ Error advancing turn:', error)
       set({ error: error.message })
       throw error
     }
@@ -372,6 +471,37 @@ const useGameStore = create((set, get) => ({
       set({ hints })
     } catch (error) {
       console.error('❌ Error loading hints:', error)
+    }
+  },
+
+  // ==========================================
+  // CHAT MESSAGES
+  // ==========================================
+  
+  sendChatMessage: async (message) => {
+    const { roomId, myUserId, myUsername } = get()
+    console.log('💬 Sending chat message:', message)
+    
+    try {
+      await gameHelpers.sendChatMessage(roomId, myUserId, myUsername, message)
+      await get().loadChatMessages()
+      console.log('✅ Chat message sent')
+    } catch (error) {
+      console.error('❌ Error sending chat message:', error)
+      set({ error: error.message })
+      throw error
+    }
+  },
+  
+  loadChatMessages: async () => {
+    const { roomId } = get()
+    
+    try {
+      const messages = await gameHelpers.getChatMessages(roomId)
+      console.log('💬 Loaded', messages.length, 'chat messages')
+      set({ chatMessages: messages })
+    } catch (error) {
+      console.error('❌ Error loading chat messages:', error)
     }
   },
 
@@ -435,6 +565,11 @@ const useGameStore = create((set, get) => ({
         // Add to eliminated list
         const { eliminated } = get()
         set({ eliminated: [...eliminated, eliminatedId] })
+        
+        // Update turn order (remove eliminated player)
+        const { turnOrder } = get()
+        const newTurnOrder = turnOrder.filter(id => id !== eliminatedId)
+        set({ turnOrder: newTurnOrder, currentTurnIndex: 0 })
       }
 
       // Check if game should end
@@ -455,7 +590,9 @@ const useGameStore = create((set, get) => ({
       set({ 
         gamePhase: 'WHISPER',
         hints: [],
-        votes: []
+        votes: [],
+        chatMessages: [],
+        currentTurnIndex: 0
       })
       get().startPhaseTimer('WHISPER')
       
@@ -513,6 +650,11 @@ const useGameStore = create((set, get) => ({
       onVoteSubmitted: async (payload) => {
         console.log('🗳️ New vote submitted')
         await get().loadVotes()
+      },
+      
+      onChatMessage: async (payload) => {
+        console.log('💬 New chat message')
+        await get().loadChatMessages()
       }
     })
     
@@ -521,7 +663,7 @@ const useGameStore = create((set, get) => ({
   },
 
   syncGameStart: async () => {
-    const { roomId, myUserId } = get()
+    const { roomId, myUserId, participants } = get()
     console.log('🔄 Syncing game start...')
     
     try {
@@ -535,9 +677,14 @@ const useGameStore = create((set, get) => ({
       
       console.log('📝 Synced - My role:', mySecret.role, '| Word:', mySecret.secret_word)
       
+      // Initialize turn order
+      const turnOrder = participants.map(p => p.user_id)
+      
       set({ 
         mySecret,
-        gamePhase: 'WHISPER'
+        gamePhase: 'WHISPER',
+        turnOrder,
+        currentTurnIndex: 0
       })
       
       // Start phase timer
