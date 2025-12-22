@@ -27,6 +27,12 @@ export const isSupabaseConfigured = () => {
   return supabase !== null
 }
 
+// Helper to detect if string is UUID format
+function isUUID(str) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  return uuidRegex.test(str)
+}
+
 // Game room helpers for anonymous users
 export const gameHelpers = {
   // Create room with guest ID and custom settings
@@ -206,18 +212,36 @@ export const gameHelpers = {
     return data
   },
 
-  // Get room details
-  getRoom: async (roomId) => {
+  // Get room details - accepts both UUID (id) and room_code
+  getRoom: async (roomIdOrCode) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    const { data, error } = await supabase
-      .from('game_rooms')
-      .select('*')
-      .eq('id', roomId)
-      .single()
+    // Detect if input is UUID or room code
+    const isId = isUUID(roomIdOrCode)
     
-    if (error) throw error
-    return data
+    if (isId) {
+      // Query by UUID id column (backwards compatibility)
+      console.log('🔍 Fetching room by ID:', roomIdOrCode)
+      const { data, error } = await supabase
+        .from('game_rooms')
+        .select('*')
+        .eq('id', roomIdOrCode)
+        .single()
+      
+      if (error) throw error
+      return data
+    } else {
+      // Query by room_code column (new behavior)
+      console.log('🔍 Fetching room by code:', roomIdOrCode)
+      const { data, error } = await supabase
+        .from('game_rooms')
+        .select('*')
+        .eq('room_code', roomIdOrCode.toUpperCase())
+        .single()
+      
+      if (error) throw error
+      return data
+    }
   },
 
   // Get room participants with profiles
