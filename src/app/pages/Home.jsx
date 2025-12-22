@@ -50,11 +50,11 @@ const Home = () => {
     try {
       console.log('🚪 Joining room with code:', roomCode)
       const room = await joinRoom(roomCode.toUpperCase())
-      console.log('✅ Room joined:', room.id)
+      console.log('✅ Room joined:', room.id, 'code:', room.room_code)
       
-      // Navigate IMMEDIATELY - before any state changes
-      console.log('🚀 Navigating to:', `/lobby/${room.id}`)
-      navigate(`/lobby/${room.id}`)
+      // Navigate using room_code (6-char code) to match /lobby/:roomCode route
+      console.log('🚀 Navigating to:', `/lobby/${room.room_code}`)
+      navigate(`/lobby/${room.room_code}`)
       
       // Clean up state after navigation
       setShowJoinModal(false)
@@ -91,15 +91,15 @@ const Home = () => {
       const room = await createRoom(gameMode, difficulty, wordPack, customSettings)
       console.log('✅ Room created:', room)
       
-      if (!room || !room.id) {
-        throw new Error('Room creation failed - no room ID returned')
+      if (!room || !room.id || !room.room_code) {
+        throw new Error('Room creation failed - no room ID or code returned')
       }
       
-      console.log('🎯 Room ID:', room.id)
+      console.log('🎯 Room ID:', room.id, 'Room Code:', room.room_code)
       
-      // Navigate IMMEDIATELY - before any state changes
-      console.log('🚀 Navigating to:', `/lobby/${room.id}`)
-      navigate(`/lobby/${room.id}`)
+      // Navigate using room_code (6-char code) to match /lobby/:roomCode route
+      console.log('🚀 Navigating to:', `/lobby/${room.room_code}`)
+      navigate(`/lobby/${room.room_code}`)
       
       // Clean up state after navigation
       setShowCreateModal(false)
