@@ -3,6 +3,8 @@ describe('Phase 2: Guest Identity System', () => {
     // Clear localStorage before each test
     cy.clearLocalStorage()
     cy.visit('/')
+    // Wait for React useEffect to initialize guest
+    cy.wait(300)
   })
 
   describe('TC010: Guest ID generated on first visit', () => {
@@ -55,6 +57,7 @@ describe('Phase 2: Guest Identity System', () => {
 
       // Reload page
       cy.reload()
+      cy.wait(300) // Wait for initialization
 
       // Check guest ID is the same
       cy.window().then((win) => {
@@ -74,6 +77,7 @@ describe('Phase 2: Guest Identity System', () => {
       // Navigate away and back
       cy.visit('https://example.com')
       cy.visit('/')
+      cy.wait(300) // Wait for initialization
 
       // Check guest ID hasn't changed
       cy.window().then((win) => {
@@ -94,6 +98,7 @@ describe('Phase 2: Guest Identity System', () => {
 
       // Reload to trigger initialization
       cy.reload()
+      cy.wait(300)
 
       // Check it uses the existing ID
       cy.window().then((win) => {
@@ -105,15 +110,16 @@ describe('Phase 2: Guest Identity System', () => {
     it('should not overwrite existing guest ID', () => {
       const existingGuestId = 'guest_9999999999_existing'
       
-      // Set existing ID
+      // Set existing ID before visit
+      cy.clearLocalStorage()
       cy.window().then((win) => {
         win.localStorage.setItem('guestId', existingGuestId)
         win.localStorage.setItem('guestUsername', 'ExistingPlayer')
       })
 
-      // Open create room modal (triggers store initialization)
-      cy.contains('button', 'Create Room').click()
-      cy.wait(500) // Wait for initialization
+      // Reload page
+      cy.reload()
+      cy.wait(300)
 
       // Check ID hasn't changed
       cy.window().then((win) => {
@@ -157,6 +163,7 @@ describe('Phase 2: Guest Identity System', () => {
       })
 
       cy.reload()
+      cy.wait(300)
 
       cy.window().then((win) => {
         const secondUsername = win.localStorage.getItem('guestUsername')
@@ -176,6 +183,7 @@ describe('Phase 2: Guest Identity System', () => {
 
       // Simulate new tab by clearing memory but keeping localStorage
       cy.reload()
+      cy.wait(300)
 
       // Check it uses same ID
       cy.window().then((win) => {
@@ -195,6 +203,7 @@ describe('Phase 2: Guest Identity System', () => {
 
       // Second "tab" (reload)
       cy.reload()
+      cy.wait(300)
       cy.window().then((win) => {
         secondId = win.localStorage.getItem('guestId')
       })
@@ -208,15 +217,20 @@ describe('Phase 2: Guest Identity System', () => {
 
   describe('Edge Cases', () => {
     it('should handle corrupted localStorage gracefully', () => {
-      // Set invalid data
+      // Clear and set invalid empty data
+      cy.clearLocalStorage()
+      
+      // Set empty strings (corrupted data)
       cy.window().then((win) => {
         win.localStorage.setItem('guestId', '')
         win.localStorage.setItem('guestUsername', '')
       })
 
+      // Reload to trigger reinitialization
       cy.reload()
+      cy.wait(300)
 
-      // Should generate new valid IDs
+      // Should have generated new valid IDs
       cy.window().then((win) => {
         const guestId = win.localStorage.getItem('guestId')
         const username = win.localStorage.getItem('guestUsername')
@@ -230,23 +244,23 @@ describe('Phase 2: Guest Identity System', () => {
 
     it('should generate unique IDs on different visits', () => {
       let firstId
-      let secondId
 
       // First visit
       cy.window().then((win) => {
         firstId = win.localStorage.getItem('guestId')
       })
 
-      // Clear and revisit (new user)
+      // Clear and create new user
       cy.clearLocalStorage()
       cy.reload()
+      cy.wait(300)
 
+      // Get new ID
       cy.window().then((win) => {
-        secondId = win.localStorage.getItem('guestId')
-      })
-
-      // IDs should be different
-      cy.then(() => {
+        const secondId = win.localStorage.getItem('guestId')
+        
+        // IDs should be different
+        expect(secondId).to.not.be.null
         expect(firstId).to.not.equal(secondId)
       })
     })
