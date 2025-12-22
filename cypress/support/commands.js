@@ -7,7 +7,8 @@
 // ==========================================
 
 // Clear all storage and subscriptions - USE THIS IN beforeEach
-Cypress.Commands.add('clearLocalStorage', () => {
+// Note: Named clearAllStorage to avoid conflict with Cypress built-in clearLocalStorage
+Cypress.Commands.add('clearAllStorage', () => {
   cy.window().then((win) => {
     // Clear all storage
     win.localStorage.clear()
@@ -30,7 +31,7 @@ Cypress.Commands.add('clearLocalStorage', () => {
 
 // Force reload and wait for app initialization
 Cypress.Commands.add('resetApp', () => {
-  cy.clearLocalStorage()
+  cy.clearAllStorage()
   cy.visit('/', { timeout: 30000 })
   cy.get('[data-testid="app-root"]', { timeout: 30000 }).should('exist')
   cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 30000 }).should('exist')
