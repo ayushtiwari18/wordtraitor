@@ -19,7 +19,12 @@ function App() {
 
   return (
     <div data-testid="app-root" data-guest-initialized={!!myUserId}>
-      <Router>
+      <Router
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/lobby/:roomCode" element={<Lobby />} />
