@@ -7,7 +7,6 @@ import { Play, Users, Sparkles, Settings, ChevronDown, ChevronUp } from 'lucide-
 const Home = () => {
   const navigate = useNavigate()
   const { createRoom, joinRoom } = useGameStore()
-  const isMountedRef = useRef(true)
 
   const [showJoinModal, setShowJoinModal] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -30,13 +29,6 @@ const Home = () => {
   const [verdictTime, setVerdictTime] = useState(45)
   const [revealTime, setRevealTime] = useState(15)
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false
-    }
-  }, [])
-
   const handleJoinRoom = async (e) => {
     e.preventDefault()
     setError('')
@@ -47,181 +39,82 @@ const Home = () => {
     }
 
     setIsJoining(true)
-    let lastError = null
     
-    // Retry logic for network failures
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      if (!isMountedRef.current) break
+    try {
+      console.log('🚪 Joining room:', roomCode)
+      const room = await joinRoom(roomCode.toUpperCase())
       
-      try {
-        console.log(`🚪 Join attempt ${attempt}/3 - Room code:`, roomCode)
-        const room = await joinRoom(roomCode.toUpperCase())
-        
-        // CRITICAL: Validate room object
-        if (!room || !room.id || !room.room_code) {
-          throw new Error('Invalid room data received from server')
-        }
-        
-        console.log('✅ Room joined:', room.id, 'code:', room.room_code)
-        const targetUrl = `/lobby/${room.room_code}`
-        console.log('🚀 Navigating to:', targetUrl)
-        
-        // AGGRESSIVE FIX: Use both navigate() AND window.location for guaranteed navigation
-        if (isMountedRef.current) {
-          // Try React Router first
-          navigate(targetUrl, { replace: true })
-          
-          // Then use direct window.location as backup (will override if navigate fails)
-          setTimeout(() => {
-            if (window.location.pathname === '/') {
-              console.log('⚠️ Navigate failed, using window.location')
-              window.location.href = targetUrl
-            }
-          }, 100)
-          
-          // Wait for navigation
-          await new Promise(resolve => setTimeout(resolve, 200))
-          
-          if (isMountedRef.current) {
-            setShowJoinModal(false)
-            setRoomCode('')
-            setError('')
-            setIsJoining(false)
-          }
-          return
-        }
-        
-        break
-        
-      } catch (err) {
-        console.error(`❌ Join attempt ${attempt} failed:`, err)
-        lastError = err
-        
-        // Retry on network errors
-        if (err.message?.includes('fetch') || err.message?.includes('network')) {
-          if (attempt < 3) {
-            console.log(`⏳ Retrying in ${attempt * 500}ms...`)
-            await new Promise(resolve => setTimeout(resolve, attempt * 500))
-            continue
-          }
-        }
-        
-        break
+      // Validate room object
+      if (!room || !room.id || !room.room_code) {
+        throw new Error('Invalid room data received from server')
       }
-    }
-    
-    // Handle error only if component is still mounted
-    if (isMountedRef.current) {
-      setError(lastError?.message || 'Failed to join room')
+      
+      console.log('✅ Room joined:', room.id, 'code:', room.room_code)
+      const targetUrl = `/lobby/${room.room_code}`
+      console.log('🚀 Navigating to:', targetUrl)
+      
+      // Navigate using React Router
+      navigate(targetUrl, { replace: true })
+      
+      // Fallback with window.location if navigate doesn't work
+      setTimeout(() => {
+        if (window.location.pathname === '/') {
+          console.log('⚠️ Navigate failed, using window.location')
+          window.location.href = targetUrl
+        }
+      }, 100)
+      
+    } catch (err) {
+      console.error('❌ Join failed:', err)
+      setError(err.message || 'Failed to join room')
       setIsJoining(false)
     }
   }
 
   const handleCreateRoom = async (e) => {
-    console.log('🚨 DEBUG: handleCreateRoom called!')
-    console.log('  Event:', e.type)
-    console.log('  Settings:', { gameMode, difficulty, wordPack, traitorCount })
-    
     e.preventDefault()
     setError('')
     setIsCreating(true)
     
-    console.log('🚨 DEBUG: After setIsCreating(true)')
-    console.log('  createRoom function:', typeof createRoom)
-    console.log('  isMountedRef.current:', isMountedRef.current)
-    
-    let lastError = null
-
-    // Retry logic for network failures
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      if (!isMountedRef.current) {
-        console.log('⚠️ Component unmounted, aborting')
-        break
+    try {
+      const customSettings = {
+        traitorCount,
+        timings: {
+          WHISPER: whisperTime,
+          HINT_DROP: hintDropTime,
+          DEBATE: debateTime,
+          VERDICT: verdictTime,
+          REVEAL: revealTime
+        }
       }
       
-      try {
-        const customSettings = {
-          traitorCount,
-          timings: {
-            WHISPER: whisperTime,
-            HINT_DROP: hintDropTime,
-            DEBATE: debateTime,
-            VERDICT: verdictTime,
-            REVEAL: revealTime
-          }
-        }
-        
-        console.log(`🏠 BEFORE createRoom() call - Attempt ${attempt}/3`)
-        console.log('  Parameters:', { gameMode, difficulty, wordPack, customSettings })
-        
-        const room = await createRoom(gameMode, difficulty, wordPack, customSettings)
-        
-        console.log('🎉 AFTER createRoom() call - Got result:', room)
-        
-        // CRITICAL: Validate room object
-        if (!room || !room.id || !room.room_code) {
-          console.error('❌ Invalid room object:', room)
-          throw new Error('Invalid room data received from server')
-        }
-        
-        console.log('✅ Room created:', room)
-        console.log('🎯 Room ID:', room.id, 'Room Code:', room.room_code)
-        const targetUrl = `/lobby/${room.room_code}`
-        console.log('🚀 Navigating to:', targetUrl)
-        
-        // AGGRESSIVE FIX: Use both navigate() AND window.location for guaranteed navigation
-        if (isMountedRef.current) {
-          // Try React Router first
-          navigate(targetUrl, { replace: true })
-          
-          // Then use direct window.location as backup (will override if navigate fails)
-          setTimeout(() => {
-            if (window.location.pathname === '/') {
-              console.log('⚠️ Navigate failed, using window.location')
-              window.location.href = targetUrl
-            }
-          }, 100)
-          
-          // Wait for navigation
-          await new Promise(resolve => setTimeout(resolve, 200))
-          
-          if (isMountedRef.current) {
-            setShowCreateModal(false)
-            setError('')
-            setShowAdvanced(false)
-            setIsCreating(false)
-          }
-          return
-        }
-        
-        break
-        
-      } catch (err) {
-        console.error(`❌ Create attempt ${attempt} failed:`, err)
-        console.error('   Error name:', err.name)
-        console.error('   Error message:', err.message)
-        console.error('   Error stack:', err.stack)
-        lastError = err
-        
-        // Retry on network errors
-        if (err.message?.includes('fetch') || err.message?.includes('network')) {
-          if (attempt < 3) {
-            console.log(`⏳ Retrying in ${attempt * 500}ms...`)
-            await new Promise(resolve => setTimeout(resolve, attempt * 500))
-            continue
-          }
-        }
-        
-        break
+      console.log('🏠 Creating room with settings:', { gameMode, difficulty, wordPack, customSettings })
+      const room = await createRoom(gameMode, difficulty, wordPack, customSettings)
+      
+      // Validate room object
+      if (!room || !room.id || !room.room_code) {
+        throw new Error('Invalid room data received from server')
       }
-    }
-    
-    // Handle error only if component is still mounted
-    console.log('🚨 DEBUG: Reached error handling section')
-    if (isMountedRef.current) {
-      const errorMsg = lastError?.message || 'Failed to create room'
-      console.error('🚫 Setting error:', errorMsg)
-      setError(errorMsg)
+      
+      console.log('✅ Room created:', room)
+      console.log('🎯 Room ID:', room.id, 'Room Code:', room.room_code)
+      const targetUrl = `/lobby/${room.room_code}`
+      console.log('🚀 Navigating to:', targetUrl)
+      
+      // Navigate using React Router
+      navigate(targetUrl, { replace: true })
+      
+      // Fallback with window.location if navigate doesn't work
+      setTimeout(() => {
+        if (window.location.pathname === '/') {
+          console.log('⚠️ Navigate failed, using window.location')
+          window.location.href = targetUrl
+        }
+      }, 100)
+      
+    } catch (err) {
+      console.error('❌ Create failed:', err)
+      setError(err.message || 'Failed to create room')
       setIsCreating(false)
     }
   }
