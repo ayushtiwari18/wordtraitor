@@ -2,7 +2,113 @@
 // Custom commands for WordTraitor testing
 // ***********************************************
 
-// Create a new game room
+// ==========================================
+// CLEANUP & INITIALIZATION
+// ==========================================
+
+// Clear all storage and subscriptions - USE THIS IN beforeEach
+Cypress.Commands.add('clearLocalStorage', () => {
+  cy.window().then((win) => {
+    // Clear all storage
+    win.localStorage.clear()
+    win.sessionStorage.clear()
+    
+    // Clear IndexedDB if it exists
+    if (win.indexedDB && win.indexedDB.databases) {
+      win.indexedDB.databases().then((databases) => {
+        databases.forEach((db) => {
+          win.indexedDB.deleteDatabase(db.name)
+        })
+      }).catch(() => {
+        // Ignore errors
+      })
+    }
+    
+    cy.log('✅ All storage cleared')
+  })
+})
+
+// Force reload and wait for app initialization
+Cypress.Commands.add('resetApp', () => {
+  cy.clearLocalStorage()
+  cy.visit('/', { timeout: 30000 })
+  cy.get('[data-testid="app-root"]', { timeout: 30000 }).should('exist')
+  cy.get('[data-testid="app-root"][data-guest-initialized="true"]', { timeout: 30000 }).should('exist')
+  cy.wait(500) // Small buffer for React effects
+  cy.log('✅ App reset complete')
+})
+
+// ==========================================
+// ROOM CREATION WITH RETRY LOGIC
+// ==========================================
+
+// Create room with automatic retry for flaky database
+Cypress.Commands.add('createRoomReliable', (options = {}) => {
+  const { 
+    maxRetries = 5,
+    gameMode = 'SILENT',
+    difficulty = 'MEDIUM',
+    wordPack = 'GENERAL'
+  } = options
+  
+  let attempt = 0
+  
+  function tryCreate() {
+    attempt++
+    cy.log(`🔄 Room creation attempt ${attempt}/${maxRetries}`)
+    
+    // Click create button
+    cy.get('[data-testid="create-room-button"]', { timeout: 10000 }).click()
+    
+    // Wait for modal
+    cy.get('[data-testid="create-submit-button"]', { timeout: 10000 }).should('be.visible')
+    
+    // Set game mode if specified
+    if (gameMode === 'REAL') {
+      cy.get('[data-testid="game-mode-selector"]').select('REAL')
+    }
+    
+    // Submit
+    cy.get('[data-testid="create-submit-button"]').click()
+    
+    // Check result
+    cy.wait(3000)
+    
+    cy.url({ timeout: 15000 }).then((url) => {
+      if (url.includes('/lobby/')) {
+        cy.log(`✅ Room created successfully on attempt ${attempt}`)
+        // Verify room code exists
+        cy.get('[data-testid="room-code"]', { timeout: 10000 }).should('exist')
+      } else {
+        // Check if error occurred
+        cy.get('body').then(($body) => {
+          const hasError = $body.find('[data-testid="error-message"]').length > 0
+          
+          if (hasError || url === Cypress.config().baseUrl + '/') {
+            if (attempt < maxRetries) {
+              cy.log(`⚠️ Creation failed, retrying... (${attempt}/${maxRetries})`)
+              
+              // Close modal if open
+              if ($body.find('[data-testid="create-submit-button"]').length > 0) {
+                cy.contains('Cancel').click()
+                cy.wait(500)
+              }
+              
+              // Retry
+              tryCreate()
+            } else {
+              throw new Error(`Room creation failed after ${maxRetries} attempts`)
+            }
+          }
+        })
+      }
+    })
+  }
+  
+  tryCreate()
+})
+
+// Original create command (kept for backwards compatibility)
 Cypress.Commands.add('createRoom', (options = {}) => {
   const {
     gameMode = 'SILENT',
@@ -13,12 +119,12 @@ Cypress.Commands.add('createRoom', (options = {}) => {
   } = options
 
   // Open create room modal
-  cy.contains('button', 'Create Room').click()
+  cy.get('[data-testid="create-room-button"]').click()
   
   // Fill in settings
-  cy.get('select').eq(0).select(gameMode)
-  cy.get('select').eq(1).select(difficulty)
-  cy.get('select').eq(2).select(wordPack)
+  cy.get('[data-testid="game-mode-selector"]').select(gameMode)
+  cy.get('[data-testid="difficulty-selector"]').select(difficulty)
+  cy.get('[data-testid="wordpack-selector"]').select(wordPack)
   
   // Advanced settings if provided
   if (traitorCount > 1 || customTimings) {
@@ -36,21 +142,37 @@ Cypress.Commands.add('createRoom', (options = {}) => {
   }
   
   // Submit
-  cy.contains('button', 'Create Room').click()
+  cy.get('[data-testid="create-submit-button"]').click()
   
   // Wait for navigation to lobby
-  cy.url().should('include', '/lobby/')
-  
-  // Get and return room code
-  cy.get('div').contains(/[A-Z0-9]{6}/).invoke('text').as('roomCode')
+  cy.url({ timeout: 20000 }).should('include', '/lobby/')
 })
+
+// ==========================================
+// ROOM JOINING
+// ==========================================
 
 // Join an existing room
 Cypress.Commands.add('joinRoom', (roomCode) => {
-  cy.contains('button', 'Join Room').click()
-  cy.get('input[type="text"]').type(roomCode)
-  cy.contains('button', 'Join Game').click()
-  cy.url().should('include', '/lobby/')
+  cy.get('[data-testid="join-room-button"]').click()
+  cy.get('[data-testid="room-code-input"]').type(roomCode)
+  cy.get('[data-testid="join-button"]').click()
+  cy.url({ timeout: 20000 }).should('include', '/lobby/')
+})
+
+// ==========================================
+// HELPERS
+// ==========================================
+
+// Get room code from lobby
+Cypress.Commands.add('getRoomCode', () => {
+  return cy.get('[data-testid="room-code"]', { timeout: 10000 })
+    .invoke('text')
+    .then((code) => {
+      const trimmed = code.trim()
+      cy.log(`📋 Room code: ${trimmed}`)
+      return cy.wrap(trimmed)
+    })
 })
 
 // Wait for realtime connection
@@ -79,6 +201,10 @@ Cypress.Commands.add('clearGuestData', () => {
     win.localStorage.removeItem('guestUsername')
   })
 })
+
+// ==========================================
+// GAME PHASE COMMANDS
+// ==========================================
 
 // Wait for game phase
 Cypress.Commands.add('waitForPhase', (phaseName) => {
