@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
@@ -7,6 +7,7 @@ import { Play, Users, Sparkles, Settings, ChevronDown, ChevronUp } from 'lucide-
 const Home = () => {
   const navigate = useNavigate()
   const { createRoom, joinRoom } = useGameStore()
+  const isMountedRef = useRef(true)
 
   const [showJoinModal, setShowJoinModal] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -29,6 +30,13 @@ const Home = () => {
   const [verdictTime, setVerdictTime] = useState(45)
   const [revealTime, setRevealTime] = useState(15)
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
   const handleJoinRoom = async (e) => {
     e.preventDefault()
     setError('')
@@ -44,18 +52,26 @@ const Home = () => {
       const room = await joinRoom(roomCode.toUpperCase())
       console.log('✅ Room joined:', room.id)
       
-      // CRITICAL: Close modal FIRST
+      // Check if still mounted before state updates
+      if (!isMountedRef.current) return
+      
+      // Close modal and clear state
       setShowJoinModal(false)
       setRoomCode('')
       setError('')
+      setIsJoining(false)
       
-      // Then navigate
-      console.log('📦 Navigating to:', `/lobby/${room.id}`)
-      navigate(`/lobby/${room.id}`)
+      // Navigate on next tick to ensure state updates complete
+      setTimeout(() => {
+        console.log('📦 Navigating to:', `/lobby/${room.id}`)
+        navigate(`/lobby/${room.id}`)
+      }, 0)
     } catch (err) {
       console.error('❌ Join error:', err)
-      setError(err.message || 'Failed to join room')
-      setIsJoining(false)
+      if (isMountedRef.current) {
+        setError(err.message || 'Failed to join room')
+        setIsJoining(false)
+      }
     }
   }
 
@@ -87,19 +103,27 @@ const Home = () => {
       
       console.log('🧠 Room ID:', room.id)
       
-      // CRITICAL: Close modal FIRST
+      // Check if still mounted before state updates
+      if (!isMountedRef.current) return
+      
+      // Close modal and clear state
       setShowCreateModal(false)
       setError('')
       setShowAdvanced(false)
+      setIsCreating(false)
       
-      // Then navigate
-      console.log('📦 Navigating to:', `/lobby/${room.id}`)
-      navigate(`/lobby/${room.id}`)
+      // Navigate on next tick to ensure state updates complete
+      setTimeout(() => {
+        console.log('📦 Navigating to:', `/lobby/${room.id}`)
+        navigate(`/lobby/${room.id}`)
+      }, 0)
       
     } catch (err) {
       console.error('❌ Create error:', err)
-      setError(err.message || 'Failed to create room')
-      setIsCreating(false)
+      if (isMountedRef.current) {
+        setError(err.message || 'Failed to create room')
+        setIsCreating(false)
+      }
     }
   }
 
