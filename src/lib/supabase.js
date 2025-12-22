@@ -80,95 +80,131 @@ async function withRetry(promiseFn, operationName, maxRetries = 3, baseDelay = 1
   }
 }
 
+// Utility: Generate room code
+function generateRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return code
+}
+
 // Game room helpers for anonymous users
 export const gameHelpers = {
   // Create room with guest ID and custom settings
   createRoom: async (guestId, username, gameMode = 'SILENT', difficulty = 'MEDIUM', wordPack = 'GENERAL', customSettings = {}) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    const roomCode = generateRoomCode()
-    console.log('🎲 Generated room code:', roomCode)
-    console.log('👤 Creating room for:', username, '(', guestId.slice(0, 15), '...)')
-    console.log('⚙️ Settings:', { gameMode, difficulty, wordPack, traitorCount: customSettings.traitorCount || 1 })
+    const maxCodeRetries = 5 // Retry up to 5 times for unique code
+    let lastError = null
     
-    try {
-      // STEP 1: Insert room record with retry
-      const startTime = Date.now()
-      console.log('⏱️ [1/2] Inserting into game_rooms table...')
+    // Try creating room with different codes if collision occurs
+    for (let codeAttempt = 1; codeAttempt <= maxCodeRetries; codeAttempt++) {
+      const roomCode = generateRoomCode()
+      console.log(`🎲 Generated room code (attempt ${codeAttempt}/${maxCodeRetries}):`, roomCode)
       
-      const { data, error } = await withRetry(
-        () => supabase
-          .from('game_rooms')
-          .insert({
-            room_code: roomCode,
-            host_id: guestId,
-            game_mode: gameMode,
-            difficulty: difficulty,
-            word_pack: wordPack,
-            status: 'LOBBY',
-            max_players: 8,
-            custom_timings: customSettings.timings || null,
-            traitor_count: customSettings.traitorCount || 1
-          })
-          .select()
-          .single(),
-        'Room creation (game_rooms insert)',
-        3,
-        1000,
-        20000
-      )
-      
-      const elapsed1 = Date.now() - startTime
-      console.log(`✅ [1/2] Room record created in ${elapsed1}ms - ID: ${data?.id?.slice(0, 8)}...`)
-      
-      if (error) {
-        console.error('❌ Room creation error:')
-        console.error('  Message:', error.message)
-        console.error('  Code:', error.code)
-        console.error('  Details:', error.details)
-        console.error('  Hint:', error.hint)
-        throw error
+      if (codeAttempt === 1) {
+        console.log('👤 Creating room for:', username, '(', guestId.slice(0, 15), '...)')
+        console.log('⚙️ Settings:', { gameMode, difficulty, wordPack, traitorCount: customSettings.traitorCount || 1 })
       }
       
-      // STEP 2: Add host as participant with retry
-      const startTime2 = Date.now()
-      console.log('⏱️ [2/2] Adding host to room_participants table...')
-      
-      const { error: participantError } = await withRetry(
-        () => supabase
-          .from('room_participants')
-          .insert({
-            room_id: data.id,
-            user_id: guestId,
-            username: username
-          }),
-        'Add participant (room_participants insert)',
-        3,
-        1000,
-        20000
-      )
-      
-      const elapsed2 = Date.now() - startTime2
-      console.log(`✅ [2/2] Host added to participants in ${elapsed2}ms`)
-      
-      if (participantError) {
-        console.error('❌ Participant add error:')
-        console.error('  Message:', participantError.message)
-        console.error('  Code:', participantError.code)
-        throw participantError
+      try {
+        // STEP 1: Insert room record with retry
+        const startTime = Date.now()
+        console.log('⏱️ [1/2] Inserting into game_rooms table...')
+        
+        const { data, error } = await withRetry(
+          () => supabase
+            .from('game_rooms')
+            .insert({
+              room_code: roomCode,
+              host_id: guestId,
+              game_mode: gameMode,
+              difficulty: difficulty,
+              word_pack: wordPack,
+              status: 'LOBBY',
+              max_players: 8,
+              custom_timings: customSettings.timings || null,
+              traitor_count: customSettings.traitorCount || 1
+            })
+            .select()
+            .single(),
+          'Room creation (game_rooms insert)',
+          3,
+          1000,
+          20000
+        )
+        
+        const elapsed1 = Date.now() - startTime
+        
+        if (error) {
+          // Check if it's a unique constraint violation (duplicate room_code)
+          if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('unique')) {
+            console.log(`⚠️ Room code ${roomCode} already exists, trying another...`)
+            lastError = error
+            continue // Try with a new code
+          }
+          
+          console.error('❌ Room creation error:')
+          console.error('  Message:', error.message)
+          console.error('  Code:', error.code)
+          console.error('  Details:', error.details)
+          console.error('  Hint:', error.hint)
+          throw error
+        }
+        
+        console.log(`✅ [1/2] Room record created in ${elapsed1}ms - ID: ${data?.id?.slice(0, 8)}...`)
+        
+        // STEP 2: Add host as participant with retry
+        const startTime2 = Date.now()
+        console.log('⏱️ [2/2] Adding host to room_participants table...')
+        
+        const { error: participantError } = await withRetry(
+          () => supabase
+            .from('room_participants')
+            .insert({
+              room_id: data.id,
+              user_id: guestId,
+              username: username
+            }),
+          'Add participant (room_participants insert)',
+          3,
+          1000,
+          20000
+        )
+        
+        const elapsed2 = Date.now() - startTime2
+        console.log(`✅ [2/2] Host added to participants in ${elapsed2}ms`)
+        
+        if (participantError) {
+          console.error('❌ Participant add error:')
+          console.error('  Message:', participantError.message)
+          console.error('  Code:', participantError.code)
+          throw participantError
+        }
+        
+        const totalTime = Date.now() - startTime
+        console.log(`🎉 Room creation complete in ${totalTime}ms total`)
+        console.log('📋 Room details:', { id: data.id, room_code: data.room_code, host_id: data.host_id })
+        
+        return data
+        
+      } catch (error) {
+        // If it's NOT a code collision, throw immediately
+        if (error.code !== '23505' && !error.message?.includes('duplicate') && !error.message?.includes('unique')) {
+          console.error('💥 FATAL: Room creation failed')
+          console.error('   Error name:', error.name)
+          console.error('   Error message:', error.message)
+          throw error
+        }
+        
+        lastError = error
       }
-      
-      const totalTime = Date.now() - startTime
-      console.log(`🎉 Room creation complete in ${totalTime}ms total`)
-      console.log('📋 Room details:', { id: data.id, room_code: data.room_code, host_id: data.host_id })
-      
-      return data
-    } catch (error) {
-      console.error('💥 FATAL: Room creation failed')
-      console.error('   Error name:', error.name)
-      console.error('   Error message:', error.message)
-      throw error
     }
+    
+    // If we exhausted all code retries
+    throw new Error(`Failed to generate unique room code after ${maxCodeRetries} attempts`)
   },
 
   // Join existing room with retry logic
@@ -762,14 +798,4 @@ export const realtimeHelpers = {
       supabase.removeChannel(channel)
     }
   }
-}
-
-// Utility: Generate room code
-function generateRoomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let code = ''
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return code
 }
