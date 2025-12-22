@@ -42,14 +42,19 @@ const Home = () => {
     try {
       console.log('🚪 Joining room with code:', roomCode)
       const room = await joinRoom(roomCode.toUpperCase())
-      console.log('✅ Room joined, navigating to:', `/lobby/${room.id}`)
+      console.log('✅ Room joined:', room.id)
       
-      // Navigate immediately - no setTimeout
+      // CRITICAL: Close modal FIRST
+      setShowJoinModal(false)
+      setRoomCode('')
+      setError('')
+      
+      // Then navigate
+      console.log('📦 Navigating to:', `/lobby/${room.id}`)
       navigate(`/lobby/${room.id}`)
     } catch (err) {
       console.error('❌ Join error:', err)
       setError(err.message || 'Failed to join room')
-    } finally {
       setIsJoining(false)
     }
   }
@@ -82,7 +87,12 @@ const Home = () => {
       
       console.log('🧠 Room ID:', room.id)
       
-      // Navigate immediately - no setTimeout
+      // CRITICAL: Close modal FIRST
+      setShowCreateModal(false)
+      setError('')
+      setShowAdvanced(false)
+      
+      // Then navigate
       console.log('📦 Navigating to:', `/lobby/${room.id}`)
       navigate(`/lobby/${room.id}`)
       
@@ -195,257 +205,273 @@ const Home = () => {
       </div>
 
       {/* Join Room Modal */}
-      {showJoinModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-gray-800 border-2 border-gray-700 rounded-2xl p-8 max-w-md w-full"
+      <AnimatePresence>
+        {showJoinModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           >
-            <h2 className="text-2xl font-bold text-white mb-6">Join Room</h2>
-            <form onSubmit={handleJoinRoom}>
-              <div className="mb-6">
-                <label className="block text-gray-300 mb-2">Room Code</label>
-                <input
-                  data-testid="room-code-input"
-                  type="text"
-                  value={roomCode}
-                  onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                  placeholder="Enter 6-digit code"
-                  maxLength={6}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white text-center text-2xl font-bold tracking-widest focus:outline-none focus:border-purple-500"
-                  autoFocus
-                />
-              </div>
-              {error && (
-                <div data-testid="error-message" className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400 text-sm">
-                  {error}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-gray-800 border-2 border-gray-700 rounded-2xl p-8 max-w-md w-full"
+            >
+              <h2 className="text-2xl font-bold text-white mb-6">Join Room</h2>
+              <form onSubmit={handleJoinRoom}>
+                <div className="mb-6">
+                  <label className="block text-gray-300 mb-2">Room Code</label>
+                  <input
+                    data-testid="room-code-input"
+                    type="text"
+                    value={roomCode}
+                    onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                    placeholder="Enter 6-digit code"
+                    maxLength={6}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white text-center text-2xl font-bold tracking-widest focus:outline-none focus:border-purple-500"
+                    autoFocus
+                  />
                 </div>
-              )}
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowJoinModal(false)
-                    setRoomCode('')
-                    setError('')
-                  }}
-                  className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold text-white transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  data-testid="join-button"
-                  type="submit"
-                  disabled={isJoining || !roomCode.trim()}
-                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-colors"
-                >
-                  {isJoining ? 'Joining...' : 'Join Game'}
-                </button>
-              </div>
-            </form>
+                {error && (
+                  <div data-testid="error-message" className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400 text-sm">
+                    {error}
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowJoinModal(false)
+                      setRoomCode('')
+                      setError('')
+                    }}
+                    className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    data-testid="join-button"
+                    type="submit"
+                    disabled={isJoining || !roomCode.trim()}
+                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-colors"
+                  >
+                    {isJoining ? 'Joining...' : 'Join Game'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </motion.div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Create Room Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-gray-800 border-2 border-gray-700 rounded-2xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto"
+      <AnimatePresence>
+        {showCreateModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           >
-            <h2 className="text-2xl font-bold text-white mb-6">Create Room</h2>
-            <form onSubmit={handleCreateRoom}>
-              {/* Game Mode */}
-              <div className="mb-4">
-                <label className="block text-gray-300 mb-2">Game Mode</label>
-                <select
-                  data-testid="game-mode-selector"
-                  value={gameMode}
-                  onChange={(e) => setGameMode(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500"
-                >
-                  <option value="SILENT">Silent Mode (Text chat + hints)</option>
-                  <option value="REAL">Real Mode (Voice chat)</option>
-                </select>
-              </div>
-
-              {/* Difficulty */}
-              <div className="mb-4">
-                <label className="block text-gray-300 mb-2">Difficulty</label>
-                <select
-                  data-testid="difficulty-selector"
-                  value={difficulty}
-                  onChange={(e) => setDifficulty(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500"
-                >
-                  <option value="EASY">Easy (Similar words)</option>
-                  <option value="MEDIUM">Medium (Moderate difference)</option>
-                  <option value="HARD">Hard (Very different words)</option>
-                </select>
-              </div>
-
-              {/* Word Pack */}
-              <div className="mb-4">
-                <label className="block text-gray-300 mb-2">Word Pack</label>
-                <select
-                  data-testid="wordpack-selector"
-                  value={wordPack}
-                  onChange={(e) => setWordPack(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500"
-                >
-                  <option value="GENERAL">General</option>
-                  <option value="MOVIES">Movies</option>
-                  <option value="TECH">Technology</option>
-                  <option value="FOOD">Food</option>
-                  <option value="NATURE">Nature</option>
-                  <option value="SPORTS">Sports</option>
-                </select>
-              </div>
-
-              {/* Advanced Settings Toggle */}
-              <button
-                type="button"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="w-full mb-4 p-3 bg-gray-900 border border-gray-700 hover:border-purple-500 rounded-lg text-white flex items-center justify-between transition-colors"
-              >
-                <span className="flex items-center gap-2">
-                  <Settings className="w-4 h-4" />
-                  Advanced Settings
-                </span>
-                {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-
-              {/* Advanced Settings */}
-              <AnimatePresence>
-                {showAdvanced && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="overflow-hidden"
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-gray-800 border-2 border-gray-700 rounded-2xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto"
+            >
+              <h2 className="text-2xl font-bold text-white mb-6">Create Room</h2>
+              <form onSubmit={handleCreateRoom}>
+                {/* Game Mode */}
+                <div className="mb-4">
+                  <label className="block text-gray-300 mb-2">Game Mode</label>
+                  <select
+                    data-testid="game-mode-selector"
+                    value={gameMode}
+                    onChange={(e) => setGameMode(e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500"
                   >
-                    <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-4 space-y-4">
-                      {/* Traitor Count */}
-                      <div>
-                        <label className="block text-gray-300 mb-2 text-sm">
-                          Number of Traitors (1-3)
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="3"
-                          value={traitorCount}
-                          onChange={(e) => setTraitorCount(parseInt(e.target.value) || 1)}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
-                        />
-                      </div>
+                    <option value="SILENT">Silent Mode (Text chat + hints)</option>
+                    <option value="REAL">Real Mode (Voice chat)</option>
+                  </select>
+                </div>
 
-                      {/* Phase Timings */}
-                      <div>
-                        <p className="text-gray-300 text-sm font-semibold mb-2">Phase Timings (seconds)</p>
-                        
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <label className="text-gray-400 text-xs">Whisper Phase</label>
-                            <input
-                              type="number"
-                              min="10"
-                              max="300"
-                              value={whisperTime}
-                              onChange={(e) => setWhisperTime(parseInt(e.target.value) || 30)}
-                              className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
-                            />
-                          </div>
+                {/* Difficulty */}
+                <div className="mb-4">
+                  <label className="block text-gray-300 mb-2">Difficulty</label>
+                  <select
+                    data-testid="difficulty-selector"
+                    value={difficulty}
+                    onChange={(e) => setDifficulty(e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="EASY">Easy (Similar words)</option>
+                    <option value="MEDIUM">Medium (Moderate difference)</option>
+                    <option value="HARD">Hard (Very different words)</option>
+                  </select>
+                </div>
+
+                {/* Word Pack */}
+                <div className="mb-4">
+                  <label className="block text-gray-300 mb-2">Word Pack</label>
+                  <select
+                    data-testid="wordpack-selector"
+                    value={wordPack}
+                    onChange={(e) => setWordPack(e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="GENERAL">General</option>
+                    <option value="MOVIES">Movies</option>
+                    <option value="TECH">Technology</option>
+                    <option value="FOOD">Food</option>
+                    <option value="NATURE">Nature</option>
+                    <option value="SPORTS">Sports</option>
+                  </select>
+                </div>
+
+                {/* Advanced Settings Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="w-full mb-4 p-3 bg-gray-900 border border-gray-700 hover:border-purple-500 rounded-lg text-white flex items-center justify-between transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings className="w-4 h-4" />
+                    Advanced Settings
+                  </span>
+                  {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+
+                {/* Advanced Settings */}
+                <AnimatePresence>
+                  {showAdvanced && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-4 space-y-4">
+                        {/* Traitor Count */}
+                        <div>
+                          <label className="block text-gray-300 mb-2 text-sm">
+                            Number of Traitors (1-3)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="3"
+                            value={traitorCount}
+                            onChange={(e) => setTraitorCount(parseInt(e.target.value) || 1)}
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+
+                        {/* Phase Timings */}
+                        <div>
+                          <p className="text-gray-300 text-sm font-semibold mb-2">Phase Timings (seconds)</p>
                           
-                          <div className="flex items-center justify-between">
-                            <label className="text-gray-400 text-xs">Hint Drop Phase</label>
-                            <input
-                              type="number"
-                              min="10"
-                              max="300"
-                              value={hintDropTime}
-                              onChange={(e) => setHintDropTime(parseInt(e.target.value) || 60)}
-                              className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
-                            />
-                          </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <label className="text-gray-400 text-xs">Debate Phase</label>
-                            <input
-                              type="number"
-                              min="10"
-                              max="600"
-                              value={debateTime}
-                              onChange={(e) => setDebateTime(parseInt(e.target.value) || 120)}
-                              className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
-                            />
-                          </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <label className="text-gray-400 text-xs">Verdict Phase</label>
-                            <input
-                              type="number"
-                              min="10"
-                              max="300"
-                              value={verdictTime}
-                              onChange={(e) => setVerdictTime(parseInt(e.target.value) || 45)}
-                              className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
-                            />
-                          </div>
-                          
-                          <div className="flex items-center justify-between">
-                            <label className="text-gray-400 text-xs">Reveal Phase</label>
-                            <input
-                              type="number"
-                              min="5"
-                              max="60"
-                              value={revealTime}
-                              onChange={(e) => setRevealTime(parseInt(e.target.value) || 15)}
-                              className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
-                            />
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-gray-400 text-xs">Whisper Phase</label>
+                              <input
+                                type="number"
+                                min="10"
+                                max="300"
+                                value={whisperTime}
+                                onChange={(e) => setWhisperTime(parseInt(e.target.value) || 30)}
+                                className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                              />
+                            </div>
+                            
+                            <div className="flex items-center justify-between">
+                              <label className="text-gray-400 text-xs">Hint Drop Phase</label>
+                              <input
+                                type="number"
+                                min="10"
+                                max="300"
+                                value={hintDropTime}
+                                onChange={(e) => setHintDropTime(parseInt(e.target.value) || 60)}
+                                className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                              />
+                            </div>
+                            
+                            <div className="flex items-center justify-between">
+                              <label className="text-gray-400 text-xs">Debate Phase</label>
+                              <input
+                                type="number"
+                                min="10"
+                                max="600"
+                                value={debateTime}
+                                onChange={(e) => setDebateTime(parseInt(e.target.value) || 120)}
+                                className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                              />
+                            </div>
+                            
+                            <div className="flex items-center justify-between">
+                              <label className="text-gray-400 text-xs">Verdict Phase</label>
+                              <input
+                                type="number"
+                                min="10"
+                                max="300"
+                                value={verdictTime}
+                                onChange={(e) => setVerdictTime(parseInt(e.target.value) || 45)}
+                                className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                              />
+                            </div>
+                            
+                            <div className="flex items-center justify-between">
+                              <label className="text-gray-400 text-xs">Reveal Phase</label>
+                              <input
+                                type="number"
+                                min="5"
+                                max="60"
+                                value={revealTime}
+                                onChange={(e) => setRevealTime(parseInt(e.target.value) || 15)}
+                                className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {error && (
+                  <div data-testid="error-message" className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400 text-sm">
+                    {error}
+                  </div>
                 )}
-              </AnimatePresence>
 
-              {error && (
-                <div data-testid="error-message" className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400 text-sm">
-                  {error}
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateModal(false)
+                      setError('')
+                      setShowAdvanced(false)
+                    }}
+                    className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    data-testid="create-submit-button"
+                    type="submit"
+                    disabled={isCreating}
+                    className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-colors"
+                  >
+                    {isCreating ? 'Creating...' : 'Create Room'}
+                  </button>
                 </div>
-              )}
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateModal(false)
-                    setError('')
-                    setShowAdvanced(false)
-                  }}
-                  className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold text-white transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  data-testid="create-submit-button"
-                  type="submit"
-                  disabled={isCreating}
-                  className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-colors"
-                >
-                  {isCreating ? 'Creating...' : 'Create Room'}
-                </button>
-              </div>
-            </form>
+              </form>
+            </motion.div>
           </motion.div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   )
 }
