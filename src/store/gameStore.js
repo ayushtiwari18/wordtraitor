@@ -57,6 +57,9 @@ const useGameStore = create((set, get) => ({
   showResults: false,
   gameResults: null,
 
+  // CRITICAL: Track pending loadRoom calls to prevent duplicates
+  pendingRoomLoad: null, // Stores roomIdOrCode being loaded
+
   // ==========================================
   // INITIALIZATION - CALL ONCE ON APP START
   // ==========================================
@@ -195,7 +198,29 @@ const useGameStore = create((set, get) => ({
   loadRoom: async (roomIdOrCode, options = {}) => {
     const { force = false } = options
     console.log('📥 Loading room:', roomIdOrCode, force ? '(forced)' : '')
-    set({ isLoading: true, error: null })
+    
+    // CRITICAL FIX: Prevent duplicate concurrent calls
+    const { pendingRoomLoad } = get()
+    if (pendingRoomLoad === roomIdOrCode) {
+      console.log('⏳ Room load already in progress, skipping duplicate call')
+      // Return a promise that waits for the original load to complete
+      return new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+          const { pendingRoomLoad: current, room } = get()
+          if (current !== roomIdOrCode && room) {
+            clearInterval(checkInterval)
+            resolve(room)
+          }
+        }, 100)
+        // Timeout after 10 seconds
+        setTimeout(() => {
+          clearInterval(checkInterval)
+          resolve(get().room)
+        }, 10000)
+      })
+    }
+    
+    set({ isLoading: true, error: null, pendingRoomLoad: roomIdOrCode })
     
     try {
       // Initialize guest WITHOUT creating new ID
@@ -209,7 +234,7 @@ const useGameStore = create((set, get) => ({
       const { roomId: currentRoomId, realtimeChannel } = get()
       if (!force && currentRoomId === room.id && realtimeChannel) {
         console.log('⏭️ Room already loaded by UUID, skipping')
-        set({ isLoading: false })
+        set({ isLoading: false, pendingRoomLoad: null })
         return room
       }
       
@@ -238,7 +263,8 @@ const useGameStore = create((set, get) => ({
         isHost: room.host_id === guestId,
         customTimings: room.custom_timings,
         traitorCount: room.traitor_count || 1,
-        isLoading: false
+        isLoading: false,
+        pendingRoomLoad: null // Clear pending state
       })
       
       // Subscribe to real-time updates using UUID (this will cleanup old subscription)
@@ -247,7 +273,7 @@ const useGameStore = create((set, get) => ({
       return room
     } catch (error) {
       console.error('❌ Error loading room:', error)
-      set({ error: error.message, isLoading: false })
+      set({ error: error.message, isLoading: false, pendingRoomLoad: null })
       throw error
     }
   },
@@ -295,6 +321,7 @@ const useGameStore = create((set, get) => ({
         isConnected: false,
         showResults: false,
         gameResults: null,
+        pendingRoomLoad: null, // Clear pending state
         // KEEP GUEST ID
         myUserId: guestId,
         myUsername: guestUsername
