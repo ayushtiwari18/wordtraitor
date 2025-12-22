@@ -98,61 +98,70 @@ export const gameHelpers = {
     }
   },
 
-  // Join existing room
+  // Join existing room with retry logic
   joinRoom: async (roomCode, guestId, username) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    try {
-      // Find room by code
-      const { data: room, error: roomError } = await supabase
-        .from('game_rooms')
-        .select('*')
-        .eq('room_code', roomCode.toUpperCase())
-        .eq('status', 'LOBBY')
-        .single()
-      
-      if (roomError) throw new Error('Room not found or already started')
-      
-      // Check if already joined
-      const { data: existing, error: existingError } = await supabase
-        .from('room_participants')
-        .select('user_id')
-        .eq('room_id', room.id)
-        .eq('user_id', guestId)
-      
-      if (existingError) throw existingError
-      
-      if (Array.isArray(existing) && existing.length > 0) {
-        console.log('Already in room, skipping join')
-        return { room, participant: existing[0] }
+    const MAX_RETRIES = 3
+    const RETRY_DELAY = 1000
+    
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        // Find room by code
+        const { data: room, error: roomError } = await supabase
+          .from('game_rooms')
+          .select('*')
+          .eq('room_code', roomCode.toUpperCase())
+          .eq('status', 'LOBBY')
+          .single()
+        
+        if (roomError) throw new Error('Room not found or already started')
+        
+        // Check if already joined
+        const { data: existing, error: existingError } = await supabase
+          .from('room_participants')
+          .select('user_id')
+          .eq('room_id', room.id)
+          .eq('user_id', guestId)
+        
+        if (existingError) throw existingError
+        
+        if (Array.isArray(existing) && existing.length > 0) {
+          console.log('Already in room, skipping join')
+          return { room, participant: existing[0] }
+        }
+        
+        // Check player count
+        const { count } = await supabase
+          .from('room_participants')
+          .select('*', { count: 'exact', head: true })
+          .eq('room_id', room.id)
+        
+        if (count >= room.max_players) throw new Error('Room is full')
+        
+        // Join room
+        const { data, error } = await supabase
+          .from('room_participants')
+          .insert({
+            room_id: room.id,
+            user_id: guestId,
+            username: username
+          })
+          .select()
+          .single()
+        
+        if (error) throw error
+        return { ...data, room }
+        
+      } catch (error) {
+        // Retry on network errors
+        if (attempt < MAX_RETRIES && (error.message?.includes('fetch') || error.name === 'AbortError')) {
+          console.log(`Retry ${attempt}/${MAX_RETRIES} after network error`)
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt))
+          continue
+        }
+        throw error
       }
-      
-      // Check player count
-      const { count } = await supabase
-        .from('room_participants')
-        .select('*', { count: 'exact', head: true })
-        .eq('room_id', room.id)
-      
-      if (count >= room.max_players) throw new Error('Room is full')
-      
-      // Join room
-      const { data, error } = await supabase
-        .from('room_participants')
-        .insert({
-          room_id: room.id,
-          user_id: guestId,
-          username: username
-        })
-        .select()
-        .single()
-      
-      if (error) throw error
-      return { ...data, room }
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        throw new Error('Request timeout - please try again')
-      }
-      throw error
     }
   },
 
