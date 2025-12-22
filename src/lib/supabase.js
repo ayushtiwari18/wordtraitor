@@ -19,10 +19,14 @@ export const supabase = supabaseUrl && supabaseAnonKey
           eventsPerSecond: 10
         }
       },
-      // Add global timeout
+      // Optimize for free tier
+      db: {
+        schema: 'public',
+      },
       global: {
         headers: {
-          'x-client-info': 'wordtraitor-web'
+          'x-client-info': 'wordtraitor-web',
+          'Connection': 'keep-alive' // Reuse connections
         }
       }
     })
@@ -39,14 +43,41 @@ function isUUID(str) {
   return uuidRegex.test(str)
 }
 
-// Helper: Add timeout to promises
-function withTimeout(promise, timeoutMs = 10000, operationName = 'Operation') {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => 
-      setTimeout(() => reject(new Error(`${operationName} timed out after ${timeoutMs}ms`)), timeoutMs)
-    )
-  ])
+// Helper: Add timeout with exponential backoff retry
+async function withRetry(promiseFn, operationName, maxRetries = 3, baseDelay = 1000, timeout = 20000) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const promise = promiseFn()
+      const result = await Promise.race([
+        promise,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`${operationName} timed out after ${timeout}ms`)), timeout)
+        )
+      ])
+      return result
+    } catch (error) {
+      const isTimeout = error.message?.includes('timed out')
+      const isNetworkError = error.message?.includes('fetch') || error.message?.includes('network') || error.name === 'AbortError'
+      const isRateLimit = error.message?.includes('429') || error.message?.includes('rate limit')
+      
+      // Retry on transient errors
+      if (attempt < maxRetries && (isTimeout || isNetworkError || isRateLimit)) {
+        const delay = baseDelay * Math.pow(2, attempt - 1) // Exponential backoff: 1s, 2s, 4s
+        console.log(`⏳ Retry ${attempt}/${maxRetries} after ${delay}ms (${operationName})`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+        continue
+      }
+      
+      // No more retries or non-transient error
+      if (isTimeout) {
+        throw new Error('Database timeout - please check your connection and try again')
+      }
+      if (isRateLimit) {
+        throw new Error('Too many requests - please wait a moment and try again')
+      }
+      throw error
+    }
+  }
 }
 
 // Game room helpers for anonymous users
@@ -61,30 +92,30 @@ export const gameHelpers = {
     console.log('⚙️ Settings:', { gameMode, difficulty, wordPack, traitorCount: customSettings.traitorCount || 1 })
     
     try {
-      // STEP 1: Insert room record
+      // STEP 1: Insert room record with retry
       const startTime = Date.now()
       console.log('⏱️ [1/2] Inserting into game_rooms table...')
       
-      const roomInsertPromise = supabase
-        .from('game_rooms')
-        .insert({
-          room_code: roomCode,
-          host_id: guestId,
-          game_mode: gameMode,
-          difficulty: difficulty,
-          word_pack: wordPack,
-          status: 'LOBBY',
-          max_players: 8,
-          custom_timings: customSettings.timings || null,
-          traitor_count: customSettings.traitorCount || 1
-        })
-        .select()
-        .single()
-      
-      const { data, error } = await withTimeout(
-        roomInsertPromise, 
-        10000, 
-        'Room creation (game_rooms insert)'
+      const { data, error } = await withRetry(
+        () => supabase
+          .from('game_rooms')
+          .insert({
+            room_code: roomCode,
+            host_id: guestId,
+            game_mode: gameMode,
+            difficulty: difficulty,
+            word_pack: wordPack,
+            status: 'LOBBY',
+            max_players: 8,
+            custom_timings: customSettings.timings || null,
+            traitor_count: customSettings.traitorCount || 1
+          })
+          .select()
+          .single(),
+        'Room creation (game_rooms insert)',
+        3,
+        1000,
+        20000
       )
       
       const elapsed1 = Date.now() - startTime
@@ -96,26 +127,25 @@ export const gameHelpers = {
         console.error('  Code:', error.code)
         console.error('  Details:', error.details)
         console.error('  Hint:', error.hint)
-        console.error('  Full error:', JSON.stringify(error, null, 2))
         throw error
       }
       
-      // STEP 2: Add host as participant
+      // STEP 2: Add host as participant with retry
       const startTime2 = Date.now()
       console.log('⏱️ [2/2] Adding host to room_participants table...')
       
-      const participantInsertPromise = supabase
-        .from('room_participants')
-        .insert({
-          room_id: data.id,
-          user_id: guestId,
-          username: username
-        })
-      
-      const { error: participantError } = await withTimeout(
-        participantInsertPromise,
-        10000,
-        'Add participant (room_participants insert)'
+      const { error: participantError } = await withRetry(
+        () => supabase
+          .from('room_participants')
+          .insert({
+            room_id: data.id,
+            user_id: guestId,
+            username: username
+          }),
+        'Add participant (room_participants insert)',
+        3,
+        1000,
+        20000
       )
       
       const elapsed2 = Date.now() - startTime2
@@ -125,7 +155,6 @@ export const gameHelpers = {
         console.error('❌ Participant add error:')
         console.error('  Message:', participantError.message)
         console.error('  Code:', participantError.code)
-        console.error('  Details:', participantError.details)
         throw participantError
       }
       
@@ -138,100 +167,92 @@ export const gameHelpers = {
       console.error('💥 FATAL: Room creation failed')
       console.error('   Error name:', error.name)
       console.error('   Error message:', error.message)
-      console.error('   Stack:', error.stack)
-      
-      if (error.name === 'AbortError' || error.message.includes('timed out')) {
-        throw new Error('Database timeout - please check your connection and try again')
-      }
       throw error
     }
   },
 
-  // Join existing room with retry logic and improved error handling
+  // Join existing room with retry logic
   joinRoom: async (roomCode, guestId, username) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    const MAX_RETRIES = 3
-    const RETRY_DELAY = 1000
-    
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        // ✅ FIX: First check if room exists (don't filter by status yet)
-        const { data: room, error: roomError } = await supabase
+    try {
+      // Check if room exists
+      const { data: room, error: roomError } = await withRetry(
+        () => supabase
           .from('game_rooms')
           .select('*')
           .eq('room_code', roomCode.toUpperCase())
-          .single()
+          .single(),
+        'Room lookup',
+        3,
+        1000,
+        15000
+      )
+      
+      if (roomError) {
+        console.error('❌ Room lookup error:', {
+          code: roomError.code,
+          message: roomError.message,
+          roomCode: roomCode
+        })
         
-        // ✅ Better error handling with detailed logging
-        if (roomError) {
-          console.error('❌ Room lookup error:', {
-            code: roomError.code,
-            message: roomError.message,
-            details: roomError.details,
-            hint: roomError.hint,
-            roomCode: roomCode
-          })
-          
-          // PGRST116 = no rows returned
-          if (roomError.code === 'PGRST116') {
-            throw new Error('Room not found')
-          }
-          throw new Error(`Database error: ${roomError.message}`)
+        // PGRST116 = no rows returned
+        if (roomError.code === 'PGRST116') {
+          throw new Error('Room not found')
         }
-        
-        // ✅ Now check status separately with clear message
-        if (room.status !== 'LOBBY') {
-          throw new Error(`Room is already ${room.status.toLowerCase()}`)
-        }
-        
-        // Check if already joined
-        const { data: existing, error: existingError } = await supabase
-          .from('room_participants')
-          .select('user_id')
-          .eq('room_id', room.id)
-          .eq('user_id', guestId)
-        
-        if (existingError) throw existingError
-        
-        if (Array.isArray(existing) && existing.length > 0) {
-          console.log('Already in room, skipping join')
-          return room
-        }
-        
-        // Check player count
-        const { count } = await supabase
-          .from('room_participants')
-          .select('*', { count: 'exact', head: true })
-          .eq('room_id', room.id)
-        
-        if (room.max_players && count >= room.max_players) {
-          throw new Error('Room is full')
-        }
-        
-        // Join room
-        const { error } = await supabase
+        throw new Error(`Database error: ${roomError.message}`)
+      }
+      
+      // Check status
+      if (room.status !== 'LOBBY') {
+        throw new Error(`Room is already ${room.status.toLowerCase()}`)
+      }
+      
+      // Check if already joined
+      const { data: existing } = await supabase
+        .from('room_participants')
+        .select('user_id')
+        .eq('room_id', room.id)
+        .eq('user_id', guestId)
+      
+      if (Array.isArray(existing) && existing.length > 0) {
+        console.log('Already in room, skipping join')
+        return room
+      }
+      
+      // Check player count
+      const { count } = await supabase
+        .from('room_participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('room_id', room.id)
+      
+      if (room.max_players && count >= room.max_players) {
+        throw new Error('Room is full')
+      }
+      
+      // Join room with retry
+      const { error } = await withRetry(
+        () => supabase
           .from('room_participants')
           .insert({
             room_id: room.id,
             user_id: guestId,
             username: username
-          })
-        
-        if (error) throw error
-        
-        console.log('✅ Successfully joined room:', roomCode)
-        return room
-        
-      } catch (error) {
-        // Retry on network errors
-        if (attempt < MAX_RETRIES && (error.message?.includes('fetch') || error.name === 'AbortError')) {
-          console.log(`Retry ${attempt}/${MAX_RETRIES} after network error`)
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt))
-          continue
-        }
-        throw error
-      }
+          }),
+        'Join room (room_participants insert)',
+        3,
+        1000,
+        15000
+      )
+      
+      if (error) throw error
+      
+      console.log('✅ Successfully joined room:', roomCode)
+      return room
+      
+    } catch (error) {
+      console.error('❌ Join room failed:', error.message)
+      throw error
     }
   },
 
