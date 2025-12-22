@@ -192,25 +192,27 @@ const useGameStore = create((set, get) => ({
     }
   },
 
-  loadRoom: async (roomId) => {
-    // CRITICAL FIX: Skip if already loaded this room
-    const { roomId: currentRoomId, realtimeChannel } = get()
-    if (currentRoomId === roomId && realtimeChannel) {
-      console.log('⏭️ Room already loaded, skipping')
-      return get().room
-    }
-    
-    console.log('📥 Loading room:', roomId)
+  loadRoom: async (roomIdOrCode) => {
+    console.log('📥 Loading room:', roomIdOrCode)
     set({ isLoading: true, error: null })
     
     try {
       // Initialize guest WITHOUT creating new ID
       const { guestId } = get().initializeGuest()
       
-      const room = await gameHelpers.getRoom(roomId)
-      console.log('🎮 Room loaded:', room.room_code, 'Status:', room.status)
+      // Fetch room (accepts both UUID and room code)
+      const room = await gameHelpers.getRoom(roomIdOrCode)
+      console.log('🎮 Room loaded:', room.room_code, 'Status:', room.status, 'UUID:', room.id)
       
-      const participants = await gameHelpers.getParticipants(roomId)
+      // CRITICAL: Check if already loaded this exact room by UUID
+      const { roomId: currentRoomId, realtimeChannel } = get()
+      if (currentRoomId === room.id && realtimeChannel) {
+        console.log('⏭️ Room already loaded by UUID, skipping')
+        set({ isLoading: false })
+        return room
+      }
+      
+      const participants = await gameHelpers.getParticipants(room.id)
       console.log('👥 Participants loaded:', participants.length, 'players')
       
       // Check if I'm already in the room
@@ -220,9 +222,9 @@ const useGameStore = create((set, get) => ({
         console.log('🆕 Not in room, auto-joining...')
         // Auto-join if not already in room
         const { guestUsername } = get()
-        await gameHelpers.autoJoinRoom(roomId, guestId, guestUsername)
+        await gameHelpers.autoJoinRoom(room.id, guestId, guestUsername)
         // Reload participants
-        const updatedParticipants = await gameHelpers.getParticipants(roomId)
+        const updatedParticipants = await gameHelpers.getParticipants(room.id)
         console.log('👥 After auto-join:', updatedParticipants.length)
         set({ participants: updatedParticipants })
       } else {
@@ -231,15 +233,15 @@ const useGameStore = create((set, get) => ({
       
       set({ 
         room, 
-        roomId,
+        roomId: room.id, // Always use UUID for internal state
         isHost: room.host_id === guestId,
         customTimings: room.custom_timings,
         traitorCount: room.traitor_count || 1,
         isLoading: false
       })
       
-      // Subscribe to real-time updates (this will cleanup old subscription)
-      get().subscribeToRoom(roomId)
+      // Subscribe to real-time updates using UUID (this will cleanup old subscription)
+      get().subscribeToRoom(room.id)
       
       return room
     } catch (error) {
