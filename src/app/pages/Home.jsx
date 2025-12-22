@@ -37,37 +37,6 @@ const Home = () => {
     }
   }, [])
 
-  // Helper function to safely navigate with retry logic
-  const safeNavigate = async (path, retries = 3, delay = 500) => {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      if (!isMountedRef.current) {
-        console.log('⚠️ Component unmounted, canceling navigation')
-        return false
-      }
-
-      try {
-        console.log(`🚀 Navigation attempt ${attempt}/${retries} to: ${path}`)
-        
-        // Use requestAnimationFrame to ensure React has finished reconciliation
-        await new Promise(resolve => requestAnimationFrame(resolve))
-        
-        if (isMountedRef.current) {
-          navigate(path)
-          console.log('✅ Navigation successful')
-          return true
-        }
-      } catch (err) {
-        console.error(`❌ Navigation attempt ${attempt} failed:`, err)
-        if (attempt < retries) {
-          await new Promise(resolve => setTimeout(resolve, delay * attempt))
-        }
-      }
-    }
-    
-    console.error('❌ All navigation attempts failed')
-    return false
-  }
-
   const handleJoinRoom = async (e) => {
     e.preventDefault()
     setError('')
@@ -93,22 +62,20 @@ const Home = () => {
         }
         
         console.log('✅ Room joined:', room.id, 'code:', room.room_code)
+        console.log('🚀 Navigating to:', `/lobby/${room.room_code}`)
         
-        // Navigate only if component is still mounted
+        // Direct navigation - no async wrapper
         if (isMountedRef.current) {
-          const navigated = await safeNavigate(`/lobby/${room.room_code}`)
-          
-          if (navigated) {
-            // Clean up state after successful navigation
-            setShowJoinModal(false)
-            setRoomCode('')
-            setError('')
-            setIsJoining(false)
-            return
-          }
+          navigate(`/lobby/${room.room_code}`)
+          // Clean up state
+          setShowJoinModal(false)
+          setRoomCode('')
+          setError('')
+          setIsJoining(false)
+          return
         }
         
-        break // Exit retry loop if room join succeeded
+        break
         
       } catch (err) {
         console.error(`❌ Join attempt ${attempt} failed:`, err)
@@ -123,7 +90,6 @@ const Home = () => {
           }
         }
         
-        // Don't retry on other errors
         break
       }
     }
@@ -166,22 +132,20 @@ const Home = () => {
         
         console.log('✅ Room created:', room)
         console.log('🎯 Room ID:', room.id, 'Room Code:', room.room_code)
+        console.log('🚀 Navigating to:', `/lobby/${room.room_code}`)
         
-        // Navigate only if component is still mounted
+        // Direct navigation - no async wrapper  
         if (isMountedRef.current) {
-          const navigated = await safeNavigate(`/lobby/${room.room_code}`)
-          
-          if (navigated) {
-            // Clean up state after successful navigation
-            setShowCreateModal(false)
-            setError('')
-            setShowAdvanced(false)
-            setIsCreating(false)
-            return
-          }
+          navigate(`/lobby/${room.room_code}`)
+          // Clean up state
+          setShowCreateModal(false)
+          setError('')
+          setShowAdvanced(false)
+          setIsCreating(false)
+          return
         }
         
-        break // Exit retry loop if room creation succeeded
+        break
         
       } catch (err) {
         console.error(`❌ Create attempt ${attempt} failed:`, err)
@@ -196,7 +160,6 @@ const Home = () => {
           }
         }
         
-        // Don't retry on other errors
         break
       }
     }
