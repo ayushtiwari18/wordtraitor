@@ -52,7 +52,7 @@ export const gameHelpers = {
           difficulty: difficulty,
           word_pack: wordPack,
           status: 'LOBBY',
-          max_players: 8, // FIX #2: Add default max_players
+          max_players: 8,
           custom_timings: customSettings.timings || null,
           traitor_count: customSettings.traitorCount || 1
         })
@@ -98,8 +98,7 @@ export const gameHelpers = {
     }
   },
 
-  // Join existing room with retry logic
-  // FIX #1: Return room directly, not wrapped object
+  // Join existing room with retry logic and improved error handling
   joinRoom: async (roomCode, guestId, username) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -108,15 +107,34 @@ export const gameHelpers = {
     
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        // Find room by code
+        // ✅ FIX: First check if room exists (don't filter by status yet)
         const { data: room, error: roomError } = await supabase
           .from('game_rooms')
           .select('*')
           .eq('room_code', roomCode.toUpperCase())
-          .eq('status', 'LOBBY')
           .single()
         
-        if (roomError) throw new Error('Room not found or already started')
+        // ✅ Better error handling with detailed logging
+        if (roomError) {
+          console.error('❌ Room lookup error:', {
+            code: roomError.code,
+            message: roomError.message,
+            details: roomError.details,
+            hint: roomError.hint,
+            roomCode: roomCode
+          })
+          
+          // PGRST116 = no rows returned
+          if (roomError.code === 'PGRST116') {
+            throw new Error('Room not found')
+          }
+          throw new Error(`Database error: ${roomError.message}`)
+        }
+        
+        // ✅ Now check status separately with clear message
+        if (room.status !== 'LOBBY') {
+          throw new Error(`Room is already ${room.status.toLowerCase()}`)
+        }
         
         // Check if already joined
         const { data: existing, error: existingError } = await supabase
@@ -129,7 +147,6 @@ export const gameHelpers = {
         
         if (Array.isArray(existing) && existing.length > 0) {
           console.log('Already in room, skipping join')
-          // FIX #1: Return room directly (not wrapped)
           return room
         }
         
@@ -139,7 +156,6 @@ export const gameHelpers = {
           .select('*', { count: 'exact', head: true })
           .eq('room_id', room.id)
         
-        // FIX #2: Null-safe max_players check
         if (room.max_players && count >= room.max_players) {
           throw new Error('Room is full')
         }
@@ -155,7 +171,7 @@ export const gameHelpers = {
         
         if (error) throw error
         
-        // FIX #1: Return room directly (matches createRoom format)
+        console.log('✅ Successfully joined room:', roomCode)
         return room
         
       } catch (error) {
@@ -206,7 +222,6 @@ export const gameHelpers = {
       .select('*', { count: 'exact', head: true })
       .eq('room_id', roomId)
     
-    // FIX #3: Null-safe max_players check in autoJoinRoom too
     if (room.max_players && count >= room.max_players) {
       throw new Error('Room is full')
     }
