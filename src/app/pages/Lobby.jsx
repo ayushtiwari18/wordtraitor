@@ -29,6 +29,7 @@ const Lobby = () => {
   const [copied, setCopied] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [isLoadingRoom, setIsLoadingRoom] = useState(true)
 
   // Load room data ONCE on mount
   useEffect(() => {
@@ -40,18 +41,23 @@ const Lobby = () => {
       return
     }
 
+    setIsLoadingRoom(true)
     loadRoom(roomId)
-      .then(() => console.log('✅ Room loaded'))
+      .then(() => {
+        console.log('✅ Room loaded successfully')
+        setIsLoadingRoom(false)
+      })
       .catch(err => {
         console.error('❌ Load error:', err)
-        navigate('/')
+        setIsLoadingRoom(false)
+        // Don't auto-redirect on error, let user see error message
       })
 
     return () => {
       console.log('👋 Lobby unmounting (no auto leave)')
       // IMPORTANT: no leaveRoom() here at all
     }
-  }, []) // keep dependency array empty
+  }, [roomId]) // Include roomId in dependency
 
   // Navigate when game starts
   useEffect(() => {
@@ -59,7 +65,7 @@ const Lobby = () => {
       console.log('🎮 Navigating to game')
       navigate(`/game/${roomId}`)
     }
-  }, [room?.status])
+  }, [room?.status, roomId, navigate])
 
   const handleCopyCode = () => {
     if (room?.room_code) {
@@ -92,14 +98,19 @@ const Lobby = () => {
 
   const hasCustomSettings = customTimings !== null || traitorCount > 1
 
-  if (isLoading && !room) {
+  // Loading state
+  if (isLoadingRoom || (isLoading && !room)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-        <div className="text-2xl text-purple-400 animate-pulse">Loading...</div>
+        <div className="text-center">
+          <div className="text-6xl mb-4 animate-bounce">🎮</div>
+          <div className="text-2xl text-purple-400 animate-pulse">Loading room...</div>
+        </div>
       </div>
     )
   }
 
+  // Error state
   if (error && !room) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -114,7 +125,8 @@ const Lobby = () => {
     )
   }
 
-  if (!room && !isLoading) {
+  // Room not found
+  if (!room && !isLoadingRoom) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
         <div className="text-center">
