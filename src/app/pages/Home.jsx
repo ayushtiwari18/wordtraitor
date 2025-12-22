@@ -55,17 +55,16 @@ const Home = () => {
       // Check if still mounted before state updates
       if (!isMountedRef.current) return
       
-      // Close modal and clear state
+      // Close modal FIRST (this triggers AnimatePresence exit)
       setShowJoinModal(false)
+      
+      // Then clear state and navigate
       setRoomCode('')
       setError('')
       setIsJoining(false)
       
-      // Navigate on next tick to ensure state updates complete
-      setTimeout(() => {
-        console.log('📦 Navigating to:', `/lobby/${room.id}`)
-        navigate(`/lobby/${room.id}`)
-      }, 0)
+      console.log('🚀 Navigating to:', `/lobby/${room.id}`)
+      navigate(`/lobby/${room.id}`)
     } catch (err) {
       console.error('❌ Join error:', err)
       if (isMountedRef.current) {
@@ -101,22 +100,21 @@ const Home = () => {
         throw new Error('Room creation failed - no room ID returned')
       }
       
-      console.log('🧠 Room ID:', room.id)
+      console.log('🎯 Room ID:', room.id)
       
       // Check if still mounted before state updates
       if (!isMountedRef.current) return
       
-      // Close modal and clear state
+      // Close modal FIRST (this triggers AnimatePresence exit)
       setShowCreateModal(false)
+      
+      // Then clear state
       setError('')
       setShowAdvanced(false)
       setIsCreating(false)
       
-      // Navigate on next tick to ensure state updates complete
-      setTimeout(() => {
-        console.log('📦 Navigating to:', `/lobby/${room.id}`)
-        navigate(`/lobby/${room.id}`)
-      }, 0)
+      console.log('🚀 Navigating to:', `/lobby/${room.id}`)
+      navigate(`/lobby/${room.id}`)
       
     } catch (err) {
       console.error('❌ Create error:', err)
@@ -229,19 +227,29 @@ const Home = () => {
       </div>
 
       {/* Join Room Modal */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {showJoinModal && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowJoinModal(false)
+                setRoomCode('')
+                setError('')
+              }
+            }}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.2 }}
               className="bg-gray-800 border-2 border-gray-700 rounded-2xl p-8 max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
             >
               <h2 className="text-2xl font-bold text-white mb-6">Join Room</h2>
               <form onSubmit={handleJoinRoom}>
@@ -291,19 +299,29 @@ const Home = () => {
       </AnimatePresence>
 
       {/* Create Room Modal */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {showCreateModal && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isCreating) {
+                setShowCreateModal(false)
+                setError('')
+                setShowAdvanced(false)
+              }
+            }}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.2 }}
               className="bg-gray-800 border-2 border-gray-700 rounded-2xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
             >
               <h2 className="text-2xl font-bold text-white mb-6">Create Room</h2>
               <form onSubmit={handleCreateRoom}>
@@ -478,7 +496,8 @@ const Home = () => {
                       setError('')
                       setShowAdvanced(false)
                     }}
-                    className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold text-white transition-colors"
+                    disabled={isCreating}
+                    className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-colors"
                   >
                     Cancel
                   </button>
