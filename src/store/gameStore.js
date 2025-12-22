@@ -107,7 +107,6 @@ const useGameStore = create((set, get) => ({
       
       const room = await gameHelpers.createRoom(guestId, guestUsername, gameMode, difficulty, wordPack, customSettings)
       console.log('✅ Room created:', room.room_code)
-      console.log('⚙️ Custom settings:', room.custom_timings, 'traitors:', room.traitor_count)
       
       // Fetch participants immediately after creation
       const participants = await gameHelpers.getParticipants(room.id)
