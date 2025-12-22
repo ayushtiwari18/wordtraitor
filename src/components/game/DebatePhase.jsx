@@ -1,11 +1,13 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
+import ChatBox from './ChatBox'
 
 const DebatePhase = () => {
-  const { hints, participants, phaseTimer, getAliveParticipants } = useGameStore()
+  const { hints, participants, room, phaseTimer, getAliveParticipants } = useGameStore()
 
   const alivePlayers = getAliveParticipants()
+  const isSilentMode = room?.game_mode === 'SILENT'
 
   // Group hints by user
   const hintsWithUsers = hints.map(hint => {
@@ -17,49 +19,83 @@ const DebatePhase = () => {
   })
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto p-6">
       {/* Header */}
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-white mb-2">💬 Debate Time</h2>
-        <p className="text-gray-400">Discuss the hints and identify the traitor</p>
+        <p className="text-gray-400">
+          {isSilentMode ? 'Discuss the hints in chat and identify the traitor' : 'Discuss the hints and identify the traitor'}
+        </p>
         <div className="mt-4 text-3xl font-bold text-orange-400">{phaseTimer}s</div>
       </div>
 
-      {/* Hints Display */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <AnimatePresence>
-          {hintsWithUsers.map((hint, index) => (
-            <motion.div
-              key={hint.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="bg-gray-800 border-2 border-gray-700 rounded-xl p-6 hover:border-purple-500 transition-colors"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center text-lg">
-                    {hint.username.charAt(0).toUpperCase()}
+      {/* Main Content Area */}
+      <div className={`grid ${isSilentMode ? 'lg:grid-cols-2' : 'grid-cols-1'} gap-6`}>
+        {/* Hints Display */}
+        <div className="space-y-4">
+          <h3 className="text-xl font-bold text-white mb-4">💡 Given Hints</h3>
+          <div className="grid grid-cols-1 gap-4 max-h-[600px] overflow-y-auto">
+            <AnimatePresence>
+              {hintsWithUsers.map((hint, index) => (
+                <motion.div
+                  key={hint.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="bg-gray-800 border-2 border-gray-700 rounded-xl p-6 hover:border-purple-500 transition-colors"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center text-lg">
+                        {hint.username.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-white font-semibold">{hint.username}</p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(hint.submitted_at).toLocaleTimeString([], { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                          })}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-white font-semibold">{hint.username}</p>
-                    <p className="text-xs text-gray-500">
-                      {new Date(hint.submitted_at).toLocaleTimeString([], { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
+                  <div className="bg-gray-900 rounded-lg p-4 mt-3">
+                    <p className="text-2xl font-bold text-purple-400 text-center">
+                      "{hint.hint_text}"
                     </p>
                   </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+
+          {/* Alive Players */}
+          <div className="mt-6">
+            <h3 className="text-sm text-gray-400 mb-3">Players Alive: {alivePlayers.length}</h3>
+            <div className="flex flex-wrap gap-2">
+              {alivePlayers.map(player => (
+                <div
+                  key={player.user_id}
+                  className="px-3 py-1 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300"
+                >
+                  {player.username || `Player ${player.user_id.slice(0, 6)}`}
                 </div>
-              </div>
-              <div className="bg-gray-900 rounded-lg p-4 mt-3">
-                <p className="text-2xl font-bold text-purple-400 text-center">
-                  "{hint.hint_text}"
-                </p>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Chat Box - Silent Mode Only */}
+        {isSilentMode && (
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="h-[600px]"
+          >
+            <ChatBox />
+          </motion.div>
+        )}
       </div>
 
       {/* Discussion Tips */}
@@ -83,23 +119,14 @@ const DebatePhase = () => {
             <span className="text-blue-400">•</span>
             <span>The traitor is trying to blend in - look for vague hints</span>
           </li>
+          {isSilentMode && (
+            <li className="flex items-start gap-2">
+              <span className="text-blue-400">•</span>
+              <span>Use the chat to discuss suspicions and coordinate votes</span>
+            </li>
+          )}
         </ul>
       </motion.div>
-
-      {/* Alive Players */}
-      <div className="mt-6">
-        <h3 className="text-sm text-gray-400 mb-3">Players Alive: {alivePlayers.length}</h3>
-        <div className="flex flex-wrap gap-2">
-          {alivePlayers.map(player => (
-            <div
-              key={player.user_id}
-              className="px-3 py-1 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300"
-            >
-              {player.username || `Player ${player.user_id.slice(0, 6)}`}
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }
