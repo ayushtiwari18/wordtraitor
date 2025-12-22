@@ -122,10 +122,6 @@ describe('Phase 2: Game Start', () => {
         cy.get('[data-testid="participant-item"]', { timeout: 10000 }).should('have.length', 2)
         cy.wait(1000)
         
-        // Store second player's localStorage
-        const player2Guest = localStorage.getItem('guest_id')
-        const player2Username = localStorage.getItem('username')
-        
         // Go back to host and start
         cy.clearLocalStorage()
         cy.visit(`/lobby/${roomCode}`)
