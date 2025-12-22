@@ -9,8 +9,9 @@ describe('Phase 2: Game Start', () => {
   })
 
   // Add delay after each test to avoid Supabase rate limits
+  // Increased to 5s for better reliability (matching 05-lobby.cy.js)
   afterEach(() => {
-    cy.wait(3000) // 3 second cool-down between tests
+    cy.wait(5000) // 5 second cool-down between tests
   })
 
   describe('TC050-052: Start Game Controls', () => {
