@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
+import { gameHelpers } from '../../lib/supabase'
 import { Copy, Check, Users, Settings, ChevronDown, ChevronUp, Clock } from 'lucide-react'
 
 const Lobby = () => {
@@ -31,6 +32,10 @@ const Lobby = () => {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [isLoadingRoom, setIsLoadingRoom] = useState(true)
   const [isLeaving, setIsLeaving] = useState(false)
+  
+  // 🔧 FIX #6: Track polling state
+  const pollIntervalRef = useRef(null)
+  const fallbackTimerRef = useRef(null)
 
   // Load room data ONCE on mount
   useEffect(() => {
@@ -62,10 +67,74 @@ const Lobby = () => {
       })
   }, [roomIdOrCode]) // Only depend on roomIdOrCode
 
-  // Navigate when game starts
+  // 🔧 FIX #6: Hybrid approach - Realtime + Fallback Polling
+  useEffect(() => {
+    // Only poll if we're in lobby and not the host
+    if (room?.status !== 'LOBBY' || isHost) {
+      return
+    }
+    
+    console.log('⏰ Starting fallback timer (3s grace period)...')
+    
+    // Wait 3 seconds for realtime to work
+    fallbackTimerRef.current = setTimeout(() => {
+      console.log('⏰ Fallback timer expired, starting polling...')
+      
+      // Start polling every 1 second
+      pollIntervalRef.current = setInterval(async () => {
+        try {
+          console.log('🔍 Polling for game start...')
+          const updatedRoom = await gameHelpers.getRoom(roomIdOrCode)
+          
+          if (updatedRoom.status === 'PLAYING') {
+            console.log('✅ Game started (detected via polling)!')
+            
+            // Clear polling
+            if (pollIntervalRef.current) {
+              clearInterval(pollIntervalRef.current)
+              pollIntervalRef.current = null
+            }
+            
+            // Navigate to game
+            navigate(`/game/${roomIdOrCode}`)
+          }
+        } catch (error) {
+          console.error('❌ Polling error:', error)
+          // Don't stop polling on error - might be transient
+        }
+      }, 1000)
+    }, 3000)
+    
+    // Cleanup function
+    return () => {
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current)
+        fallbackTimerRef.current = null
+      }
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+        console.log('🛡️ Polling stopped (component unmounting or room status changed)')
+      }
+    }
+  }, [room?.status, isHost, roomIdOrCode, navigate])
+
+  // Navigate when game starts (via realtime - this handles 95% of cases)
   useEffect(() => {
     if (room?.status === 'PLAYING') {
-      console.log('🎮 Navigating to game')
+      console.log('🎮 Navigating to game (via realtime)')
+      
+      // Clear polling if it was running
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+        console.log('🛡️ Polling stopped (game started via realtime)')
+      }
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current)
+        fallbackTimerRef.current = null
+      }
+      
       navigate(`/game/${roomIdOrCode}`)
     }
   }, [room?.status, roomIdOrCode, navigate])
@@ -96,6 +165,16 @@ const Lobby = () => {
 
   const handleLeave = async () => {
     if (isLeaving) return // Prevent double-click
+    
+    // Clear polling on leave
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current)
+      pollIntervalRef.current = null
+    }
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current)
+      fallbackTimerRef.current = null
+    }
     
     setIsLeaving(true)
     console.log('🚪 Leave button clicked, starting leave process...')
