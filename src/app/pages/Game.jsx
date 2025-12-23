@@ -16,6 +16,7 @@ const Game = () => {
     room, 
     gamePhase,
     participants,
+    mySecret,
     loadRoom,
     isLoading,
     error,
@@ -41,6 +42,33 @@ const Game = () => {
       console.log('👋 Game unmounting (no auto leave)')
     }
   }, []) // no roomId in deps
+
+  // 🔧 SAFETY NET: Force sync if game is playing but we have no secret
+  useEffect(() => {
+    // Check if we're in a broken state
+    if (
+      room?.status === 'PLAYING' && 
+      gamePhase && 
+      !mySecret && 
+      participants.length > 0
+    ) {
+      console.log('🚨 SAFETY NET: Game is PLAYING but no secret! Force syncing...')
+      
+      const syncWithDelay = async () => {
+        // Wait a bit for loadRoom to finish
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        try {
+          await useGameStore.getState().syncGameStartWithRetry()
+          console.log('✅ Safety net sync completed')
+        } catch (error) {
+          console.error('❌ Safety net sync failed:', error)
+        }
+      }
+      
+      syncWithDelay()
+    }
+  }, [room?.status, gamePhase, mySecret, participants.length])
 
   // Redirect to results if game ended
   useEffect(() => {
