@@ -36,47 +36,46 @@ const useGameStore = create((set, get) => ({
   votes: [],
   eliminated: [],
   
-  // New: Custom settings
+  // Custom settings
   customTimings: null,
   traitorCount: 1,
   
-  // New: Turn-based hints
+  // Turn-based hints
   currentTurnIndex: 0,
-  turnOrder: [], // Array of user_ids in turn order
+  turnOrder: [],
   
-  // New: Chat messages
+  // Chat messages
   chatMessages: [],
   
   // Real-time
   realtimeChannel: null,
   isConnected: false,
+  subscriptionState: null, // 🔧 FIX #1: Track subscription state
   
   // UI state
   isLoading: false,
   error: null,
   showResults: false,
   gameResults: null,
+  syncRetryCount: 0, // 🔧 FIX #3: Track retry attempts
 
-  // CRITICAL: Track pending loadRoom calls to prevent duplicates
-  pendingRoomLoad: null, // Stores roomIdOrCode being loaded
+  // Track pending loadRoom calls
+  pendingRoomLoad: null,
 
   // ==========================================
-  // INITIALIZATION - CALL ONCE ON APP START
+  // INITIALIZATION
   // ==========================================
   
   initializeGuest: () => {
-    // Check if already initialized in store
     const { myUserId, myUsername } = get()
     if (myUserId && myUsername) {
       console.log('✅ Guest already initialized:', myUsername, `(${myUserId.slice(0, 20)}...)`)
       return { guestId: myUserId, guestUsername: myUsername }
     }
 
-    // Get from localStorage (check for empty strings too)
     let guestId = localStorage.getItem('guest_id')
     let guestUsername = localStorage.getItem('username')
     
-    // Validate: regenerate if null, undefined, or empty string
     if (!guestId || guestId.trim() === '') {
       guestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       console.log('🆕 Generated new guest ID')
@@ -87,11 +86,9 @@ const useGameStore = create((set, get) => ({
       console.log('🆕 Generated new username')
     }
     
-    // Save to localStorage
     localStorage.setItem('guest_id', guestId)
     localStorage.setItem('username', guestUsername)
     
-    // Update store
     set({ myUserId: guestId, myUsername: guestUsername })
     console.log('👤 Guest initialized:', guestUsername, `(${guestId.slice(0, 20)}...)`)
     return { guestId, guestUsername }
@@ -111,13 +108,11 @@ const useGameStore = create((set, get) => ({
       const room = await gameHelpers.createRoom(guestId, guestUsername, gameMode, difficulty, wordPack, customSettings)
       console.log('✅ Room created:', room.room_code)
       
-      // Validate room object
       if (!room || !room.id) {
         console.error('❌ Invalid room object:', room)
         throw new Error('Room creation returned invalid data')
       }
       
-      // Fetch participants immediately after creation
       const participants = await gameHelpers.getParticipants(room.id)
       console.log('👥 Initial participants:', participants.length)
       
@@ -131,7 +126,6 @@ const useGameStore = create((set, get) => ({
         isLoading: false
       })
       
-      // Start real-time subscription
       get().subscribeToRoom(room.id)
       
       return room
@@ -142,7 +136,6 @@ const useGameStore = create((set, get) => ({
     }
   },
 
-  // FIX: Updated to match new joinRoom return format (direct room object)
   joinRoom: async (roomCode) => {
     console.log('🚪 Joining room:', roomCode)
     set({ isLoading: true, error: null })
@@ -150,23 +143,16 @@ const useGameStore = create((set, get) => ({
     try {
       const { guestId, guestUsername } = get().initializeGuest()
       
-      // FIX: joinRoom now returns room directly (not { room: {...} })
       const room = await gameHelpers.joinRoom(roomCode, guestId, guestUsername)
-      console.log('✅ Joined room - Direct room object:', room)
+      console.log('✅ Joined room:', room.room_code)
       
-      // FIX: Validate direct room object
       if (!room || !room.id || !room.room_code) {
         console.error('❌ Invalid join result:', room)
         throw new Error('Join room returned invalid data')
       }
       
-      console.log('✅ Room ID from join:', room.id)
-      console.log('✅ Room code from join:', room.room_code)
-      
-      // Fetch participants using room.id (not result.room.id)
       const participants = await gameHelpers.getParticipants(room.id)
       console.log('👥 Participants after join:', participants.length)
-      console.log('⚙️ Room settings:', room.custom_timings, 'traitors:', room.traitor_count)
       
       set({ 
         room, 
@@ -178,14 +164,11 @@ const useGameStore = create((set, get) => ({
         isLoading: false
       })
       
-      // Start real-time subscription
       get().subscribeToRoom(room.id)
       
-      console.log('🎯 Returning room object with id:', room.id, 'code:', room.room_code)
       return room
     } catch (error) {
       console.error('❌ Error joining room:', error)
-      console.error('❌ Error stack:', error.stack)
       set({ error: error.message, isLoading: false })
       throw error
     }
@@ -195,11 +178,9 @@ const useGameStore = create((set, get) => ({
     const { force = false } = options
     console.log('📥 Loading room:', roomIdOrCode, force ? '(forced)' : '')
     
-    // CRITICAL FIX: Prevent duplicate concurrent calls
     const { pendingRoomLoad } = get()
     if (pendingRoomLoad === roomIdOrCode) {
-      console.log('⏳ Room load already in progress, skipping duplicate call')
-      // Return a promise that waits for the original load to complete
+      console.log('⏳ Room load already in progress, skipping duplicate')
       return new Promise((resolve) => {
         const checkInterval = setInterval(() => {
           const { pendingRoomLoad: current, room } = get()
@@ -208,7 +189,6 @@ const useGameStore = create((set, get) => ({
             resolve(room)
           }
         }, 100)
-        // Timeout after 10 seconds
         setTimeout(() => {
           clearInterval(checkInterval)
           resolve(get().room)
@@ -219,64 +199,54 @@ const useGameStore = create((set, get) => ({
     set({ isLoading: true, error: null, pendingRoomLoad: roomIdOrCode })
     
     try {
-      // Initialize guest WITHOUT creating new ID
       const { guestId } = get().initializeGuest()
       
-      // Fetch room (accepts both UUID and room code)
       const room = await gameHelpers.getRoom(roomIdOrCode)
-      console.log('🎮 Room loaded:', room.room_code, 'Status:', room.status, 'UUID:', room.id)
+      console.log('🎮 Room loaded:', room.room_code, 'Status:', room.status)
       
-      // CRITICAL: Check if already loaded this exact room by UUID (unless forced)
       const { roomId: currentRoomId, realtimeChannel } = get()
       if (!force && currentRoomId === room.id && realtimeChannel) {
-        console.log('⏭️ Room already loaded by UUID, skipping')
+        console.log('⏭️ Room already loaded, skipping')
         set({ isLoading: false, pendingRoomLoad: null })
         return room
       }
       
       const participants = await gameHelpers.getParticipants(room.id)
-      console.log('👥 Participants loaded:', participants.length, 'players')
+      console.log('👥 Participants loaded:', participants.length)
       
-      // FIXED: Check if I'm already in the room MORE STRICTLY
       const alreadyJoined = participants.some(p => {
-        // Normalize guest_id by removing prefix if present
         const normalizedGuestId = guestId.replace('guest_', '')
         const normalizedParticipantId = p.user_id.replace('guest_', '')
         return p.user_id === guestId || normalizedParticipantId === normalizedGuestId
       })
       
-      console.log('🔍 Checking participant status: guestId=', guestId.slice(0, 20), 'alreadyJoined=', alreadyJoined)
-      
       if (!alreadyJoined && room.status === 'LOBBY') {
-        console.log('🆕 Not in room, auto-joining...')
-        // Auto-join if not already in room
+        console.log('🆕 Auto-joining room...')
         const { guestUsername } = get()
         await gameHelpers.autoJoinRoom(room.id, guestId, guestUsername)
-        // Reload participants
         const updatedParticipants = await gameHelpers.getParticipants(room.id)
-        console.log('👥 After auto-join:', updatedParticipants.length)
         set({ participants: updatedParticipants })
       } else {
-        if (alreadyJoined) {
-          console.log('✅ Already in room, skipping auto-join')
-        } else {
-          console.log('ℹ️ Room status is', room.status, ', not auto-joining')
-        }
         set({ participants })
       }
       
       set({ 
         room, 
-        roomId: room.id, // Always use UUID for internal state
+        roomId: room.id,
         isHost: room.host_id === guestId,
         customTimings: room.custom_timings,
         traitorCount: room.traitor_count || 1,
+        gamePhase: room.current_phase || null, // 🔧 FIX #2: Load phase from DB
         isLoading: false,
-        pendingRoomLoad: null // Clear pending state
+        pendingRoomLoad: null
       })
       
-      // Subscribe to real-time updates using UUID (this will cleanup old subscription)
       get().subscribeToRoom(room.id)
+      
+      // 🔧 FIX #2: Sync phase timer if game is already playing
+      if (room.status === 'PLAYING' && room.current_phase && room.phase_started_at) {
+        get().syncPhaseTimer(room.current_phase, room.phase_started_at)
+      }
       
       return room
     } catch (error) {
@@ -295,18 +265,14 @@ const useGameStore = create((set, get) => ({
         await gameHelpers.leaveRoom(roomId, myUserId)
       }
       
-      // Unsubscribe from real-time
       if (realtimeChannel) {
-        console.log('🔌 Unsubscribing from real-time')
         realtimeHelpers.unsubscribe(realtimeChannel)
       }
       
-      // Clear phase timer
       if (phaseInterval) {
         clearInterval(phaseInterval)
       }
       
-      // Reset store (but keep guest ID!)
       const { myUserId: guestId, myUsername: guestUsername } = get()
       set({
         room: null,
@@ -327,10 +293,11 @@ const useGameStore = create((set, get) => ({
         chatMessages: [],
         realtimeChannel: null,
         isConnected: false,
+        subscriptionState: null, // 🔧 FIX #1: Reset subscription state
         showResults: false,
         gameResults: null,
-        pendingRoomLoad: null, // Clear pending state
-        // KEEP GUEST ID
+        pendingRoomLoad: null,
+        syncRetryCount: 0, // 🔧 FIX #3: Reset retry counter
         myUserId: guestId,
         myUsername: guestUsername
       })
@@ -341,7 +308,7 @@ const useGameStore = create((set, get) => ({
   },
 
   // ==========================================
-  // GAME FLOW
+  // GAME FLOW (SERVER-AUTHORITATIVE)
   // ==========================================
   
   startGame: async () => {
@@ -356,24 +323,24 @@ const useGameStore = create((set, get) => ({
       }
       
       console.log('🎲 Starting game with', participants.length, 'players')
-      console.log('🎭 Traitor count:', traitorCount)
       
-      // Update room status
+      // 🔧 FIX #2: Write phase to DB FIRST, then assign roles
       await gameHelpers.startGame(roomId)
       console.log('✅ Room status updated to PLAYING')
       
-      // Assign roles and words (with custom traitor count)
+      // 🔧 FIX #3: Ensure roles are written before continuing
       await gameHelpers.assignRoles(roomId, participants, room.difficulty, room.word_pack, traitorCount)
-      console.log('✅ Roles assigned')
+      console.log('✅ Roles assigned and written to DB')
       
-      // Load my secret
+      // Wait a moment for DB to propagate
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Load my secret with retry
       const { myUserId } = get()
-      const mySecret = await gameHelpers.getMySecret(roomId, myUserId)
+      const mySecret = await get().getMySecretWithRetry(roomId, myUserId)
       console.log('📝 My role:', mySecret.role, '| Word:', mySecret.secret_word)
       
-      // Initialize turn order (alive players)
       const turnOrder = participants.map(p => p.user_id)
-      console.log('🔄 Turn order initialized:', turnOrder.length, 'players')
       
       set({ 
         mySecret,
@@ -383,13 +350,77 @@ const useGameStore = create((set, get) => ({
         isLoading: false
       })
       
-      // Start phase timer
-      get().startPhaseTimer('WHISPER')
+      // 🔧 FIX #2: Write phase transition to DB
+      await gameHelpers.advancePhase(roomId, 'WHISPER')
       
     } catch (error) {
       console.error('❌ Error starting game:', error)
       set({ error: error.message, isLoading: false })
       throw error
+    }
+  },
+
+  // 🔧 FIX #3: Retry logic for getMySecret
+  getMySecretWithRetry: async (roomId, userId, maxRetries = 5) => {
+    const delays = [500, 1000, 2000, 3000, 4000] // Exponential backoff
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const secret = await gameHelpers.getMySecret(roomId, userId)
+        
+        if (secret && secret.role && secret.secret_word) {
+          console.log(`✅ Secret retrieved on attempt ${attempt + 1}`)
+          set({ syncRetryCount: 0 })
+          return secret
+        }
+        
+        if (attempt < maxRetries - 1) {
+          const delay = delays[attempt]
+          console.log(`⏳ Retry ${attempt + 1}/${maxRetries} after ${delay}ms...`)
+          set({ syncRetryCount: attempt + 1 })
+          await new Promise(resolve => setTimeout(resolve, delay))
+        }
+      } catch (error) {
+        console.error(`❌ Attempt ${attempt + 1} failed:`, error)
+        if (attempt === maxRetries - 1) throw error
+      }
+    }
+    
+    throw new Error('Failed to retrieve secret after multiple retries')
+  },
+
+  // 🔧 FIX #2: Sync phase timer from server timestamp
+  syncPhaseTimer: (phaseName, phaseStartedAt) => {
+    const phase = GAME_PHASES[phaseName]
+    if (!phase) return
+    
+    const duration = get().getPhaseDuration(phaseName)
+    const startTime = new Date(phaseStartedAt).getTime()
+    const now = Date.now()
+    const elapsed = Math.floor((now - startTime) / 1000)
+    const remaining = Math.max(0, duration - elapsed)
+    
+    console.log(`⏰ Syncing ${phaseName}: ${remaining}s remaining (${elapsed}s elapsed)`)
+    
+    const { phaseInterval } = get()
+    if (phaseInterval) clearInterval(phaseInterval)
+    
+    let timeLeft = remaining
+    set({ phaseTimer: timeLeft })
+    
+    if (timeLeft > 0) {
+      const interval = setInterval(() => {
+        timeLeft -= 1
+        set({ phaseTimer: timeLeft })
+        
+        if (timeLeft <= 0) {
+          clearInterval(interval)
+          console.log(`⏰ ${phaseName} phase ended`)
+          // Host will advance phase via DB write
+        }
+      }, 1000)
+      
+      set({ phaseInterval: interval })
     }
   },
 
@@ -408,11 +439,8 @@ const useGameStore = create((set, get) => ({
     const duration = get().getPhaseDuration(phaseName)
     console.log(`⏰ Starting ${phaseName} phase (${duration}s)`)
     
-    // Clear existing timer
     const { phaseInterval } = get()
-    if (phaseInterval) {
-      clearInterval(phaseInterval)
-    }
+    if (phaseInterval) clearInterval(phaseInterval)
     
     let timeLeft = duration
     set({ phaseTimer: timeLeft })
@@ -424,15 +452,27 @@ const useGameStore = create((set, get) => ({
       if (timeLeft <= 0) {
         clearInterval(interval)
         console.log(`⏰ ${phaseName} phase ended, advancing...`)
-        get().advancePhase()
+        
+        // 🔧 FIX #2: Only HOST advances phase in DB
+        const { isHost } = get()
+        if (isHost) {
+          get().advancePhase()
+        }
       }
     }, 1000)
     
     set({ phaseInterval: interval })
   },
 
+  // 🔧 FIX #2: Phase advancement now writes to DB
   advancePhase: async () => {
-    const { gamePhase, roomId } = get()
+    const { gamePhase, roomId, isHost } = get()
+    
+    if (!isHost) {
+      console.log('⏭️ Not host, skipping phase advance')
+      return
+    }
+    
     const currentPhase = GAME_PHASES[gamePhase]
     
     if (!currentPhase?.next) {
@@ -441,19 +481,10 @@ const useGameStore = create((set, get) => ({
       return
     }
     
-    console.log(`➡️ Advancing from ${gamePhase} to ${currentPhase.next}`)
-    set({ gamePhase: currentPhase.next })
+    console.log(`➡️ Host advancing from ${gamePhase} to ${currentPhase.next}`)
     
-    // Load data for new phase
-    if (currentPhase.next === 'DEBATE') {
-      await get().loadHints()
-      await get().loadChatMessages()
-    } else if (currentPhase.next === 'REVEAL') {
-      await get().loadVotes()
-    }
-    
-    // Start timer for next phase
-    get().startPhaseTimer(currentPhase.next)
+    // Write phase change to DB - all clients will sync via realtime
+    await gameHelpers.advancePhase(roomId, currentPhase.next)
   },
 
   skipPhase: async () => {
@@ -504,7 +535,6 @@ const useGameStore = create((set, get) => ({
       await gameHelpers.submitHint(roomId, myUserId, hintText)
       await get().loadHints()
       
-      // Advance turn only in Silent Mode
       if (room?.game_mode === 'SILENT') {
         get().advanceTurn()
       }
@@ -519,10 +549,9 @@ const useGameStore = create((set, get) => ({
   
   submitRealModeNext: async () => {
     const { roomId, myUserId } = get()
-    console.log('➡️ Real Mode: Marking hint as given verbally')
+    console.log('➡️ Real Mode: Next')
     
     try {
-      // Submit placeholder hint for Real Mode
       await gameHelpers.submitHint(roomId, myUserId, '[VERBAL]')
       await get().loadHints()
       get().advanceTurn()
@@ -626,7 +655,6 @@ const useGameStore = create((set, get) => ({
         const eliminatedPlayer = participants.find(p => p.user_id === eliminatedId)
         console.log('💀 Eliminated:', eliminatedPlayer?.username)
         
-        // Eliminate player
         const updatedParticipants = participants.map(p => 
           p.user_id === eliminatedId ? { ...p, is_alive: false } : p
         )
@@ -634,17 +662,14 @@ const useGameStore = create((set, get) => ({
         
         await gameHelpers.eliminatePlayer(roomId, eliminatedId)
         
-        // Add to eliminated list
         const { eliminated } = get()
         set({ eliminated: [...eliminated, eliminatedId] })
         
-        // Update turn order (remove eliminated player)
         const { turnOrder } = get()
         const newTurnOrder = turnOrder.filter(id => id !== eliminatedId)
         set({ turnOrder: newTurnOrder, currentTurnIndex: 0 })
       }
 
-      // Check if game should end
       const gameEnd = await gameHelpers.checkGameEnd(roomId)
       
       if (gameEnd.ended) {
@@ -657,7 +682,6 @@ const useGameStore = create((set, get) => ({
         return
       }
       
-      // Continue to next round
       console.log('🔄 Game continues to next round...')
       set({ 
         gamePhase: 'WHISPER',
@@ -666,7 +690,12 @@ const useGameStore = create((set, get) => ({
         chatMessages: [],
         currentTurnIndex: 0
       })
-      get().startPhaseTimer('WHISPER')
+      
+      // 🔧 FIX #2: Host writes phase to DB
+      const { isHost } = get()
+      if (isHost) {
+        await gameHelpers.advancePhase(roomId, 'WHISPER')
+      }
       
     } catch (error) {
       console.error('❌ Error checking win conditions:', error)
@@ -675,41 +704,68 @@ const useGameStore = create((set, get) => ({
   },
 
   // ==========================================
-  // REAL-TIME SUBSCRIPTIONS
+  // REAL-TIME SUBSCRIPTIONS (FIXED)
   // ==========================================
   
   subscribeToRoom: (roomId) => {
-    const { realtimeChannel: existingChannel } = get()
+    // 🔧 FIX #1: Check subscription state first
+    const { subscriptionState, realtimeChannel: existingChannel } = get()
     
-    // CRITICAL FIX: Cleanup existing subscription first
+    if (subscriptionState === 'connecting' || subscriptionState === 'connected') {
+      console.log('⏭️ Subscription already active, skipping')
+      return
+    }
+    
+    // Cleanup existing channel
     if (existingChannel) {
       console.log('🔄 Cleaning up previous subscription')
       realtimeHelpers.unsubscribe(existingChannel)
-      set({ realtimeChannel: null, isConnected: false })
     }
     
+    set({ subscriptionState: 'connecting' })
     console.log('📡 Subscribing to real-time updates for room:', roomId)
     
     const channel = realtimeHelpers.subscribeToRoom(roomId, {
+      // 🔧 FIX #4: Use get() inside callbacks to avoid stale closures
       onRoomUpdate: (payload) => {
         console.log('🔄 Room updated:', payload.eventType)
-        const { room } = get()
         
         if (payload.eventType === 'UPDATE') {
           const updatedRoom = payload.new
+          const currentRoom = get().room
+          
           set({ room: updatedRoom })
           
-          // If game started by host, sync phase
-          if (room?.status === 'LOBBY' && updatedRoom.status === 'PLAYING') {
+          // 🔧 FIX #2: Sync phase from DB update
+          if (updatedRoom.current_phase && updatedRoom.current_phase !== get().gamePhase) {
+            console.log(`🔄 Phase changed to ${updatedRoom.current_phase} via realtime`)
+            set({ gamePhase: updatedRoom.current_phase })
+            
+            // Sync timer
+            if (updatedRoom.phase_started_at) {
+              get().syncPhaseTimer(updatedRoom.current_phase, updatedRoom.phase_started_at)
+            }
+            
+            // Load data for new phase
+            if (updatedRoom.current_phase === 'DEBATE') {
+              get().loadHints()
+              get().loadChatMessages()
+            } else if (updatedRoom.current_phase === 'REVEAL') {
+              get().loadVotes()
+            }
+          }
+          
+          // 🔧 FIX #3: Trigger sync with retry when game starts
+          if (currentRoom?.status === 'LOBBY' && updatedRoom.status === 'PLAYING') {
             console.log('🎮 Game started by host, syncing...')
-            get().syncGameStart()
+            get().syncGameStartWithRetry()
           }
         }
       },
       
       onParticipantUpdate: async (payload) => {
         console.log('👥 Participants updated')
-        const { roomId } = get()
+        const roomId = get().roomId
         const participants = await gameHelpers.getParticipants(roomId)
         set({ participants })
       },
@@ -730,26 +786,24 @@ const useGameStore = create((set, get) => ({
       }
     })
     
-    set({ realtimeChannel: channel, isConnected: true })
+    set({ 
+      realtimeChannel: channel, 
+      isConnected: true,
+      subscriptionState: 'connected' // 🔧 FIX #1: Mark as connected
+    })
     console.log('✅ Real-time subscribed and connected')
   },
 
-  syncGameStart: async () => {
+  // 🔧 FIX #3: Enhanced syncGameStart with retry logic
+  syncGameStartWithRetry: async () => {
     const { roomId, myUserId, participants } = get()
-    console.log('🔄 Syncing game start...')
+    console.log('🔄 Syncing game start with retry...')
     
     try {
-      // Load my secret
-      const mySecret = await gameHelpers.getMySecret(roomId, myUserId)
-      
-      if (!mySecret) {
-        console.log('⏳ Secret not assigned yet, waiting...')
-        return
-      }
+      const mySecret = await get().getMySecretWithRetry(roomId, myUserId)
       
       console.log('📝 Synced - My role:', mySecret.role, '| Word:', mySecret.secret_word)
       
-      // Initialize turn order
       const turnOrder = participants.map(p => p.user_id)
       
       set({ 
@@ -759,12 +813,23 @@ const useGameStore = create((set, get) => ({
         currentTurnIndex: 0
       })
       
-      // Start phase timer
-      get().startPhaseTimer('WHISPER')
+      // Sync timer
+      const room = get().room
+      if (room?.phase_started_at) {
+        get().syncPhaseTimer('WHISPER', room.phase_started_at)
+      } else {
+        get().startPhaseTimer('WHISPER')
+      }
       
     } catch (error) {
-      console.error('❌ Error syncing game start:', error)
+      console.error('❌ Error syncing game start after retries:', error)
+      set({ error: 'Failed to sync game start. Please refresh.' })
     }
+  },
+
+  syncGameStart: async () => {
+    // Fallback for backwards compatibility
+    await get().syncGameStartWithRetry()
   },
 
   // ==========================================
