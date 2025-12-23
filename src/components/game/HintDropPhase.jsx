@@ -65,7 +65,7 @@ const HintDropPhase = () => {
   const currentPlayer = getCurrentTurnPlayer()
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto p-6" data-testid="hint-drop-phase-container">
       {/* Header */}
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-white mb-2">💡 Drop Your Hint</h2>
@@ -73,9 +73,9 @@ const HintDropPhase = () => {
           {isSilentMode ? 'Give a one-word hint about your secret word' : 'Say your hint out loud, then click Next'}
         </p>
         <div className="mt-4 flex items-center justify-center gap-2">
-          <div className="text-2xl font-bold text-purple-400">{phaseTimer}s</div>
+          <div data-testid="phase-timer" className="text-2xl font-bold text-purple-400">{phaseTimer}s</div>
           <div className="text-gray-400">|</div>
-          <div className="text-sm text-gray-400">
+          <div data-testid="hint-progress" className="text-sm text-gray-400">
             {submittedCount}/{totalCount} hints submitted
           </div>
         </div>
@@ -86,6 +86,7 @@ const HintDropPhase = () => {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
+          data-testid="current-turn-player"
           className={`mb-6 p-4 rounded-xl border-2 text-center ${
             isMyTurn 
               ? 'bg-purple-500/20 border-purple-500'
@@ -114,6 +115,7 @@ const HintDropPhase = () => {
               onChange={(e) => setHintText(e.target.value)}
               placeholder="Type your one-word hint..."
               maxLength={30}
+              data-testid="hint-input"
               className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-purple-500 transition-colors"
               disabled={isSubmitting}
               autoFocus
@@ -124,6 +126,7 @@ const HintDropPhase = () => {
               </p>
               <button
                 type="submit"
+                data-testid="submit-hint-button"
                 disabled={!hintText.trim() || isSubmitting}
                 className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-colors"
               >
@@ -148,6 +151,7 @@ const HintDropPhase = () => {
             <button
               onClick={handleRealModeNext}
               disabled={isSubmitting}
+              data-testid="real-mode-next-button"
               className="px-8 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-colors flex items-center gap-2 mx-auto"
             >
               {isSubmitting ? 'Processing...' : 'Next Player'}
@@ -163,6 +167,7 @@ const HintDropPhase = () => {
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           className="mb-8 bg-gray-800 border-2 border-gray-700 rounded-xl p-6 text-center"
+          data-testid="waiting-for-turn"
         >
           <div className="text-4xl mb-2">⏳</div>
           <p className="text-gray-400">Wait for your turn...</p>
@@ -177,6 +182,7 @@ const HintDropPhase = () => {
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
+          data-testid="hint-submitted-confirmation"
           className="mb-8 bg-green-500/20 border-2 border-green-500 rounded-xl p-6 text-center"
         >
           <div className="text-4xl mb-2">✓</div>
@@ -185,8 +191,23 @@ const HintDropPhase = () => {
         </motion.div>
       )}
 
+      {/* Hint List */}
+      {hints.length > 0 && (
+        <div data-testid="hint-list" className="mb-8 bg-gray-800 border border-gray-700 rounded-xl p-6">
+          <h3 className="text-white font-semibold mb-4">📝 Hints So Far</h3>
+          <div className="space-y-2">
+            {hints.map((hint, index) => (
+              <div key={hint.id || index} className="flex items-center gap-3 p-3 bg-gray-900 rounded-lg">
+                <span className="text-purple-400 font-mono">{index + 1}.</span>
+                <span className="text-white">{hint.hint_text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Submission Progress */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+      <div data-testid="player-status-grid" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
         <AnimatePresence>
           {alivePlayers.map((player, index) => {
             const hasSubmitted = hints.some(h => h.user_id === player.user_id)
@@ -199,6 +220,7 @@ const HintDropPhase = () => {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
+                data-testid="player-status-item"
                 className={`p-4 rounded-lg border-2 transition-all ${
                   hasSubmitted
                     ? 'bg-green-500/10 border-green-500'
