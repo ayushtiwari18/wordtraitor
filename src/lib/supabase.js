@@ -19,31 +19,27 @@ export const supabase = supabaseUrl && supabaseAnonKey
           eventsPerSecond: 10
         }
       },
-      // Optimize for free tier
       db: {
         schema: 'public',
       },
       global: {
         headers: {
           'x-client-info': 'wordtraitor-web',
-          'Connection': 'keep-alive' // Reuse connections
+          'Connection': 'keep-alive'
         }
       }
     })
   : null
 
-// Helper to check if Supabase is configured
 export const isSupabaseConfigured = () => {
   return supabase !== null
 }
 
-// Helper to detect if string is UUID format
 function isUUID(str) {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
   return uuidRegex.test(str)
 }
 
-// Helper: Add timeout with exponential backoff retry
 async function withRetry(promiseFn, operationName, maxRetries = 3, baseDelay = 1000, timeout = 20000) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -60,15 +56,13 @@ async function withRetry(promiseFn, operationName, maxRetries = 3, baseDelay = 1
       const isNetworkError = error.message?.includes('fetch') || error.message?.includes('network') || error.name === 'AbortError'
       const isRateLimit = error.message?.includes('429') || error.message?.includes('rate limit')
       
-      // Retry on transient errors
       if (attempt < maxRetries && (isTimeout || isNetworkError || isRateLimit)) {
-        const delay = baseDelay * Math.pow(2, attempt - 1) // Exponential backoff: 1s, 2s, 4s
+        const delay = baseDelay * Math.pow(2, attempt - 1)
         console.log(`⏳ Retry ${attempt}/${maxRetries} after ${delay}ms (${operationName})`)
         await new Promise(resolve => setTimeout(resolve, delay))
         continue
       }
       
-      // No more retries or non-transient error
       if (isTimeout) {
         throw new Error('Database timeout - please check your connection and try again')
       }
@@ -80,7 +74,6 @@ async function withRetry(promiseFn, operationName, maxRetries = 3, baseDelay = 1
   }
 }
 
-// Utility: Generate room code
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
   let code = ''
@@ -90,16 +83,13 @@ function generateRoomCode() {
   return code
 }
 
-// Game room helpers for anonymous users
 export const gameHelpers = {
-  // Create room with guest ID and custom settings
   createRoom: async (guestId, username, gameMode = 'SILENT', difficulty = 'MEDIUM', wordPack = 'GENERAL', customSettings = {}) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    const maxCodeRetries = 5 // Retry up to 5 times for unique code
+    const maxCodeRetries = 5
     let lastError = null
     
-    // Try creating room with different codes if collision occurs
     for (let codeAttempt = 1; codeAttempt <= maxCodeRetries; codeAttempt++) {
       const roomCode = generateRoomCode()
       console.log(`🎲 Generated room code (attempt ${codeAttempt}/${maxCodeRetries}):`, roomCode)
@@ -110,7 +100,6 @@ export const gameHelpers = {
       }
       
       try {
-        // STEP 1: Insert room record with retry
         const startTime = Date.now()
         console.log('⏱️ [1/2] Inserting into game_rooms table...')
         
@@ -139,11 +128,10 @@ export const gameHelpers = {
         const elapsed1 = Date.now() - startTime
         
         if (error) {
-          // Check if it's a unique constraint violation (duplicate room_code)
           if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('unique')) {
             console.log(`⚠️ Room code ${roomCode} already exists, trying another...`)
             lastError = error
-            continue // Try with a new code
+            continue
           }
           
           console.error('❌ Room creation error:')
@@ -156,7 +144,6 @@ export const gameHelpers = {
         
         console.log(`✅ [1/2] Room record created in ${elapsed1}ms - ID: ${data?.id?.slice(0, 8)}...`)
         
-        // STEP 2: Add host as participant with retry
         const startTime2 = Date.now()
         console.log('⏱️ [2/2] Adding host to room_participants table...')
         
@@ -191,7 +178,6 @@ export const gameHelpers = {
         return data
         
       } catch (error) {
-        // If it's NOT a code collision, throw immediately
         if (error.code !== '23505' && !error.message?.includes('duplicate') && !error.message?.includes('unique')) {
           console.error('💥 FATAL: Room creation failed')
           console.error('   Error name:', error.name)
@@ -203,16 +189,13 @@ export const gameHelpers = {
       }
     }
     
-    // If we exhausted all code retries
     throw new Error(`Failed to generate unique room code after ${maxCodeRetries} attempts`)
   },
 
-  // Join existing room with retry logic
   joinRoom: async (roomCode, guestId, username) => {
     if (!supabase) throw new Error('Supabase not configured')
     
     try {
-      // Check if room exists
       const { data: room, error: roomError } = await withRetry(
         () => supabase
           .from('game_rooms')
@@ -232,19 +215,16 @@ export const gameHelpers = {
           roomCode: roomCode
         })
         
-        // PGRST116 = no rows returned
         if (roomError.code === 'PGRST116') {
           throw new Error('Room not found')
         }
         throw new Error(`Database error: ${roomError.message}`)
       }
       
-      // Check status
       if (room.status !== 'LOBBY') {
         throw new Error(`Room is already ${room.status.toLowerCase()}`)
       }
       
-      // Check if already joined
       const { data: existing } = await supabase
         .from('room_participants')
         .select('user_id')
@@ -256,7 +236,6 @@ export const gameHelpers = {
         return room
       }
       
-      // Check player count
       const { count } = await supabase
         .from('room_participants')
         .select('*', { count: 'exact', head: true })
@@ -266,7 +245,6 @@ export const gameHelpers = {
         throw new Error('Room is full')
       }
       
-      // Join room with retry
       const { error } = await withRetry(
         () => supabase
           .from('room_participants')
@@ -292,11 +270,9 @@ export const gameHelpers = {
     }
   },
 
-  // Auto-join room (used when loading existing room)
   autoJoinRoom: async (roomId, guestId, username) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    // Check if room is still in lobby
     const { data: room } = await supabase
       .from('game_rooms')
       .select('status, max_players')
@@ -308,7 +284,6 @@ export const gameHelpers = {
       return null
     }
     
-    // Check if already joined
     const { data: existing, error: existingError } = await supabase
       .from('room_participants')
       .select('user_id')
@@ -322,7 +297,6 @@ export const gameHelpers = {
       return existing[0]
     }
     
-    // Check player count
     const { count } = await supabase
       .from('room_participants')
       .select('*', { count: 'exact', head: true })
@@ -332,7 +306,6 @@ export const gameHelpers = {
       throw new Error('Room is full')
     }
     
-    // Join room
     const { data, error } = await supabase
       .from('room_participants')
       .insert({
@@ -348,15 +321,12 @@ export const gameHelpers = {
     return data
   },
 
-  // Get room details - accepts both UUID (id) and room_code
   getRoom: async (roomIdOrCode) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    // Detect if input is UUID or room code
     const isId = isUUID(roomIdOrCode)
     
     if (isId) {
-      // Query by UUID id column (backwards compatibility)
       console.log('🔍 Fetching room by ID:', roomIdOrCode)
       const { data, error } = await supabase
         .from('game_rooms')
@@ -367,7 +337,6 @@ export const gameHelpers = {
       if (error) throw error
       return data
     } else {
-      // Query by room_code column (new behavior)
       console.log('🔍 Fetching room by code:', roomIdOrCode)
       const { data, error } = await supabase
         .from('game_rooms')
@@ -380,7 +349,6 @@ export const gameHelpers = {
     }
   },
 
-  // Get room participants with profiles
   getParticipants: async (roomId) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -394,7 +362,6 @@ export const gameHelpers = {
     return data
   },
 
-  // Start game
   startGame: async (roomId) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -413,11 +380,34 @@ export const gameHelpers = {
     return data
   },
 
-  // Assign roles and words with support for multiple traitors
+  // 🔧 FIX #2: Server-authoritative phase advancement
+  advancePhase: async (roomId, newPhase) => {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    console.log(`🔧 Writing phase transition to DB: ${newPhase}`)
+    
+    const { data, error } = await supabase
+      .from('game_rooms')
+      .update({ 
+        current_phase: newPhase,
+        phase_started_at: new Date().toISOString()
+      })
+      .eq('id', roomId)
+      .select()
+      .single()
+    
+    if (error) {
+      console.error('❌ Failed to write phase to DB:', error)
+      throw error
+    }
+    
+    console.log(`✅ Phase ${newPhase} written to DB at ${data.phase_started_at}`)
+    return data
+  },
+
   assignRoles: async (roomId, participants, difficulty, wordPack, traitorCount = 1) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    // Get random word pair
     const { data: wordPairs, error: wordError } = await supabase
       .from('word_pairs')
       .select('*')
@@ -430,7 +420,6 @@ export const gameHelpers = {
     
     const wordPair = wordPairs[Math.floor(Math.random() * wordPairs.length)]
     
-    // Randomly select traitors
     const traitorIndices = []
     const availableIndices = participants.map((_, i) => i)
     
@@ -440,7 +429,6 @@ export const gameHelpers = {
       availableIndices.splice(randomIndex, 1)
     }
     
-    // Assign roles
     const assignments = participants.map((p, index) => ({
       room_id: roomId,
       user_id: p.user_id,
@@ -459,7 +447,6 @@ export const gameHelpers = {
     return { wordPair, traitorIds }
   },
 
-  // Get my secret word
   getMySecret: async (roomId, userId) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -479,7 +466,6 @@ export const gameHelpers = {
     return row
   },
 
-  // Submit hint
   submitHint: async (roomId, userId, hintText) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -504,7 +490,6 @@ export const gameHelpers = {
     return data
   },
 
-  // Get all hints for current round
   getHints: async (roomId) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -525,7 +510,6 @@ export const gameHelpers = {
     return data
   },
 
-  // Send chat message (for debate phase)
   sendChatMessage: async (roomId, userId, username, message) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -551,7 +535,6 @@ export const gameHelpers = {
     return data
   },
 
-  // Get chat messages for current round
   getChatMessages: async (roomId) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -572,7 +555,6 @@ export const gameHelpers = {
     return data || []
   },
 
-  // Submit vote
   submitVote: async (roomId, voterId, targetId) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -597,7 +579,6 @@ export const gameHelpers = {
     return data
   },
 
-  // Get votes
   getVotes: async (roomId) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -617,17 +598,14 @@ export const gameHelpers = {
     return data
   },
 
-  // Calculate vote results
   calculateVoteResults: async (roomId) => {
     const votes = await gameHelpers.getVotes(roomId)
     
-    // Count votes for each target
     const voteCounts = {}
     votes.forEach(vote => {
       voteCounts[vote.target_id] = (voteCounts[vote.target_id] || 0) + 1
     })
     
-    // Find most voted
     let maxVotes = 0
     let eliminatedId = null
     Object.entries(voteCounts).forEach(([id, count]) => {
@@ -640,7 +618,6 @@ export const gameHelpers = {
     return { eliminatedId, voteCounts, votes }
   },
 
-  // Eliminate player
   eliminatePlayer: async (roomId, userId) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -653,18 +630,15 @@ export const gameHelpers = {
     if (error) throw error
   },
 
-  // Check game end conditions (updated for multiple traitors)
   checkGameEnd: async (roomId) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    // Get alive participants
     const { data: alive } = await supabase
       .from('room_participants')
       .select('user_id')
       .eq('room_id', roomId)
       .eq('is_alive', true)
     
-    // Get all secrets
     const { data: secrets } = await supabase
       .from('round_secrets')
       .select('user_id, role')
@@ -675,7 +649,6 @@ export const gameHelpers = {
       alive?.some(p => p.user_id === t.user_id)
     )
     
-    // Citizens win if all traitors eliminated
     if (aliveTraitors.length === 0) {
       return { 
         ended: true, 
@@ -684,7 +657,6 @@ export const gameHelpers = {
       }
     }
     
-    // Traitors win if they equal or outnumber citizens
     const aliveCitizens = alive.length - aliveTraitors.length
     if (aliveTraitors.length >= aliveCitizens) {
       return { 
@@ -697,7 +669,6 @@ export const gameHelpers = {
     return { ended: false }
   },
 
-  // End game
   endGame: async (roomId, winner, traitorIds) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -715,7 +686,6 @@ export const gameHelpers = {
     return { ...data, winner, traitorIds }
   },
 
-  // Leave room
   leaveRoom: async (roomId, userId) => {
     if (!supabase) throw new Error('Supabase not configured')
     
@@ -729,7 +699,6 @@ export const gameHelpers = {
   }
 }
 
-// Real-time subscription helpers
 export const realtimeHelpers = {
   subscribeToRoom: (roomId, callbacks) => {
     if (!supabase) {
