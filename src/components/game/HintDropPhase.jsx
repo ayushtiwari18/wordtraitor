@@ -14,12 +14,19 @@ const HintDropPhase = () => {
     phaseTimer,
     getAliveParticipants,
     getCurrentTurnPlayer,
-    isMyTurnToHint
+    isMyTurnToHint,
+    loadHints // 🔧 FIX: Get loadHints function
   } = useGameStore()
   
   const [hintText, setHintText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [hasSubmitted, setHasSubmitted] = useState(false)
+
+  // 🔧 FIX: Load hints when component mounts
+  useEffect(() => {
+    console.log('💡 HintDropPhase mounted, loading hints...')
+    loadHints()
+  }, [])
 
   useEffect(() => {
     // Check if I've already submitted
