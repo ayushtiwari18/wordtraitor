@@ -800,9 +800,16 @@ const useGameStore = create((set, get) => ({
       },
       
       onVoteSubmitted: async (payload) => {
-        console.log('🗳️ New vote submitted')
-        await get().loadVotes()
-      },
+  console.log('🗳️ New vote submitted')
+  // 🔧 FIX: Only load votes during REVEAL phase
+  const { gamePhase } = get()
+  if (gamePhase === 'REVEAL') {
+    await get().loadVotes()
+  } else {
+    console.log('🔒 Votes hidden until REVEAL')
+  }
+},
+
       
       onChatMessage: async (payload) => {
         console.log('💬 New chat message')
@@ -829,6 +836,7 @@ const useGameStore = create((set, get) => ({
       console.log('📝 Synced - My role:', mySecret.role, '| Word:', mySecret.secret_word)
       
       const turnOrder = participants.map(p => p.user_id)
+      console.log('📝 Turn order initialized:', turnOrder) 
       
       set({ 
         mySecret,

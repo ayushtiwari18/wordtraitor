@@ -13,15 +13,24 @@ const RevealPhase = () => {
   }, [votes])
 
   const calculateResults = async () => {
-    try {
-      const results = await gameHelpers.calculateVoteResults(roomId)
-      setVoteResults(results)
-      setLoading(false)
-    } catch (error) {
-      console.error('Error calculating results:', error)
-      setLoading(false)
-    }
+  const { roomId, room } = useGameStore()
+  
+  // 🔧 FIX: Add null checks
+  if (!roomId || !room) {
+    console.warn('⚠️ Room not loaded, skipping results')
+    setResults({ error: 'Room not loaded' })
+    return
   }
+  
+  try {
+    const results = await gameHelpers.calculateVoteResults(roomId)
+    setResults(results)
+  } catch (error) {
+    console.error('Error calculating results:', error)
+    setResults({ error: error.message })
+  }
+}
+
 
   if (loading) {
     return (
