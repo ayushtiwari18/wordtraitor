@@ -19,14 +19,14 @@ const DebatePhase = () => {
   })
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto p-6" data-testid="debate-phase-container">
       {/* Header */}
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-white mb-2">💬 Debate Time</h2>
         <p className="text-gray-400">
           {isSilentMode ? 'Discuss the hints in chat and identify the traitor' : 'Discuss the hints and identify the traitor'}
         </p>
-        <div className="mt-4 text-3xl font-bold text-orange-400">{phaseTimer}s</div>
+        <div data-testid="phase-timer" className="mt-4 text-3xl font-bold text-orange-400">{phaseTimer}s</div>
       </div>
 
       {/* Main Content Area */}
@@ -34,7 +34,7 @@ const DebatePhase = () => {
         {/* Hints Display */}
         <div className="space-y-4">
           <h3 className="text-xl font-bold text-white mb-4">💡 Given Hints</h3>
-          <div className="grid grid-cols-1 gap-4 max-h-[600px] overflow-y-auto">
+          <div data-testid="hint-list" className="grid grid-cols-1 gap-4 max-h-[600px] overflow-y-auto">
             <AnimatePresence>
               {hintsWithUsers.map((hint, index) => (
                 <motion.div
@@ -42,6 +42,7 @@ const DebatePhase = () => {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
+                  data-testid="hint-item"
                   className="bg-gray-800 border-2 border-gray-700 rounded-xl p-6 hover:border-purple-500 transition-colors"
                 >
                   <div className="flex items-start justify-between mb-3">
