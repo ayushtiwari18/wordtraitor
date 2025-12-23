@@ -22,7 +22,8 @@ const Game = () => {
     error,
     showResults,
     myUserId,
-    getAliveParticipants
+    getAliveParticipants,
+    leaveRoom
   } = useGameStore()
 
   useEffect(() => {
@@ -38,8 +39,20 @@ const Game = () => {
       navigate('/')
     })
 
+    // 🆕 ADDED: Cleanup on browser close/refresh
+    const handleBeforeUnload = (e) => {
+      console.log('👋 Browser closing, cleaning up player...')
+      // Call leaveRoom synchronously (best effort)
+      leaveRoom()
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
     return () => {
-      console.log('👋 Game unmounting (no auto leave)')
+      console.log('👋 Game component unmounting')
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      // Also clean up on normal navigation away
+      leaveRoom()
     }
   }, []) // no roomId in deps
 
@@ -80,8 +93,7 @@ const Game = () => {
 
   const handleLeave = async () => {
     if (confirm('Are you sure you want to leave the game?')) {
-      console.log('🚺 Manually leaving game')
-      const { leaveRoom } = useGameStore.getState()
+      console.log('🚪 Manually leaving game')
       await leaveRoom()
       navigate('/')
     }
@@ -173,7 +185,7 @@ const Game = () => {
             data-testid="leave-game-button"
             className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500 rounded-lg text-red-400 font-semibold transition-colors"
           >
-            🚺 Leave
+            🚪 Leave
           </button>
         </div>
       </div>
