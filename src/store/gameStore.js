@@ -40,7 +40,7 @@ const useGameStore = create((set, get) => ({
   customTimings: null,
   traitorCount: 1,
   
-  // Turn-based hints
+  // Turn-based hints (kept for display purposes, but turn is calculated from hints.length)
   currentTurnIndex: 0,
   turnOrder: [],
   
@@ -549,30 +549,40 @@ const useGameStore = create((set, get) => ({
   },
 
   // ==========================================
-  // TURN-BASED HINTS
+  // TURN-BASED HINTS (SERVER-AUTHORITATIVE)
   // ==========================================
   
+  // 🔧 FIX: Calculate current turn from hints count (server data)
   getCurrentTurnPlayer: () => {
-    const { turnOrder, currentTurnIndex, participants } = get()
+    const { turnOrder, hints, participants } = get()
     if (!turnOrder || turnOrder.length === 0) return null
     
+    // Calculate turn based on how many hints have been submitted
+    const currentTurnIndex = hints.length % turnOrder.length
     const currentUserId = turnOrder[currentTurnIndex]
     return participants.find(p => p.user_id === currentUserId)
   },
   
+  // 🔧 FIX: Calculate if it's my turn from hints count (server data)
   isMyTurnToHint: () => {
-    const { turnOrder, currentTurnIndex, myUserId, gamePhase } = get()
+    const { turnOrder, hints, myUserId, gamePhase } = get()
     if (gamePhase !== 'HINT_DROP') return false
     if (!turnOrder || turnOrder.length === 0) return false
     
+    // Calculate turn based on how many hints have been submitted
+    const currentTurnIndex = hints.length % turnOrder.length
     const currentUserId = turnOrder[currentTurnIndex]
+    
+    console.log(`🔄 Turn calculation: ${hints.length} hints submitted → Turn ${currentTurnIndex} (${currentUserId === myUserId ? 'MY TURN' : 'waiting'})`)
+    
     return currentUserId === myUserId
   },
   
+  // Keep advanceTurn for display purposes only (no longer used for turn logic)
   advanceTurn: () => {
     const { currentTurnIndex, turnOrder } = get()
     const nextIndex = (currentTurnIndex + 1) % turnOrder.length
-    console.log(`🔄 Turn ${currentTurnIndex} -> ${nextIndex}`)
+    console.log(`🔄 Turn ${currentTurnIndex} -> ${nextIndex} (display only)`)
     set({ currentTurnIndex: nextIndex })
   },
 
@@ -581,16 +591,14 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   submitHint: async (hintText) => {
-    const { roomId, myUserId, room } = get()
+    const { roomId, myUserId } = get()
     console.log('💬 Submitting hint:', hintText)
     
     try {
       await gameHelpers.submitHint(roomId, myUserId, hintText)
       await get().loadHints()
       
-      if (room?.game_mode === 'SILENT') {
-        get().advanceTurn()
-      }
+      // 🔧 FIX: Removed advanceTurn() - turn auto-advances via hints.length calculation!
       
       console.log('✅ Hint submitted')
     } catch (error) {
@@ -607,7 +615,9 @@ const useGameStore = create((set, get) => ({
     try {
       await gameHelpers.submitHint(roomId, myUserId, '[VERBAL]')
       await get().loadHints()
-      get().advanceTurn()
+      
+      // 🔧 FIX: Removed advanceTurn() - turn auto-advances via hints.length calculation!
+      
       console.log('✅ Turn advanced')
     } catch (error) {
       console.error('❌ Error advancing turn:', error)
