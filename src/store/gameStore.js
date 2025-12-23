@@ -416,7 +416,21 @@ const useGameStore = create((set, get) => ({
         if (timeLeft <= 0) {
           clearInterval(interval)
           console.log(`⏰ ${phaseName} phase ended`)
-          // Host will advance phase via DB write
+          
+          // 🔧 FIX #5: Properly handle async advancePhase in timer callback
+          const { isHost } = get()
+          if (isHost) {
+            console.log('🎯 Host triggering phase advance...')
+            ;(async () => {
+              try {
+                await get().advancePhase()
+              } catch (error) {
+                console.error('❌ Error auto-advancing phase:', error)
+              }
+            })()
+          } else {
+            console.log('⏳ Waiting for host to advance phase...')
+          }
         }
       }, 1000)
       
@@ -451,12 +465,21 @@ const useGameStore = create((set, get) => ({
       
       if (timeLeft <= 0) {
         clearInterval(interval)
-        console.log(`⏰ ${phaseName} phase ended, advancing...`)
+        console.log(`⏰ ${phaseName} phase ended`)
         
-        // 🔧 FIX #2: Only HOST advances phase in DB
+        // 🔧 FIX #5: Properly handle async advancePhase in timer callback
         const { isHost } = get()
         if (isHost) {
-          get().advancePhase()
+          console.log('🎯 Host triggering phase advance...')
+          ;(async () => {
+            try {
+              await get().advancePhase()
+            } catch (error) {
+              console.error('❌ Error auto-advancing phase:', error)
+            }
+          })()
+        } else {
+          console.log('⏳ Waiting for host to advance phase...')
         }
       }
     }, 1000)
@@ -766,6 +789,7 @@ const useGameStore = create((set, get) => ({
       onParticipantUpdate: async (payload) => {
         console.log('👥 Participants updated')
         const roomId = get().roomId
+        if (!roomId) return
         const participants = await gameHelpers.getParticipants(roomId)
         set({ participants })
       },
