@@ -9,8 +9,9 @@ export default defineConfig({
     videoCompression: 32,
     screenshotOnRunFailure: true,
     defaultCommandTimeout: 10000,
-    requestTimeout: 10000,
-    responseTimeout: 10000,
+    // FIX: Increased timeouts from 10s to 30s for better network resilience
+    requestTimeout: 30000,
+    responseTimeout: 30000,
     setupNodeEvents(on, config) {
       // implement node event listeners here
     },
