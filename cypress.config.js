@@ -1,4 +1,5 @@
 import { defineConfig } from 'cypress'
+import tasks from './cypress/support/tasks.js'
 
 export default defineConfig({
   e2e: {
@@ -9,15 +10,27 @@ export default defineConfig({
     videoCompression: 32,
     screenshotOnRunFailure: true,
     // INCREASED: Better handling of Supabase network latency
-    defaultCommandTimeout: 15000, // Increased from 10s to 15s
-    requestTimeout: 15000, // Increased from 10s to 15s
-    responseTimeout: 15000, // Increased from 10s to 15s
-    pageLoadTimeout: 30000, // Added for slow initial loads
+    defaultCommandTimeout: 15000,
+    requestTimeout: 15000,
+    responseTimeout: 15000,
+    pageLoadTimeout: 30000,
     setupNodeEvents(on, config) {
-      // implement node event listeners here
+      // Register custom tasks for scaled testing
+      on('task', {
+        mockSecondPlayer: tasks.mockSecondPlayer,
+        setGamePhase: tasks.setGamePhase,
+        cleanupTestData: tasks.cleanupTestData,
+        getRoomStats: tasks.getRoomStats,
+        mockGameStart: tasks.mockGameStart
+      })
+      
+      return config
     },
     env: {
-      // Add environment variables here if needed
+      // Test configuration for 100-user scale
+      MAX_CONCURRENT_GAMES: 20,
+      MAX_PLAYERS_PER_GAME: 10,
+      TEST_MODE: 'scaled' // Can be 'scaled' or 'full'
     },
     specPattern: 'cypress/e2e/**/*.cy.{js,jsx,ts,tsx}',
   },
