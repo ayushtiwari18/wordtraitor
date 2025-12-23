@@ -25,6 +25,7 @@ const useGameStore = create((set, get) => ({
   participants: [],
   myUserId: null,
   myUsername: null,
+  guestUsername: localStorage.getItem('username') || '', // 🆕 ADDED for Home.jsx
   isHost: false,
 
   // Game state
@@ -66,6 +67,14 @@ const useGameStore = create((set, get) => ({
   // INITIALIZATION
   // ==========================================
   
+  // 🆕 ADDED: setGuestUsername for Home.jsx
+  setGuestUsername: (username) => {
+    const trimmed = username.trim()
+    localStorage.setItem('username', trimmed)
+    set({ guestUsername: trimmed, myUsername: trimmed })
+    console.log('📝 Username updated:', trimmed)
+  },
+
   initializeGuest: () => {
     const { myUserId, myUsername } = get()
     if (myUserId && myUsername) {
@@ -81,15 +90,16 @@ const useGameStore = create((set, get) => ({
       console.log('🆕 Generated new guest ID')
     }
     
+    // 🆕 CHANGED: Only generate random username if none exists
     if (!guestUsername || guestUsername.trim() === '') {
       guestUsername = `Player${Math.floor(Math.random() * 9999)}`
-      console.log('🆕 Generated new username')
+      console.log('🆕 Generated new username (no custom username set)')
     }
     
     localStorage.setItem('guest_id', guestId)
     localStorage.setItem('username', guestUsername)
     
-    set({ myUserId: guestId, myUsername: guestUsername })
+    set({ myUserId: guestId, myUsername: guestUsername, guestUsername })
     console.log('👤 Guest initialized:', guestUsername, `(${guestId.slice(0, 20)}...)`)
     return { guestId, guestUsername }
   },
@@ -338,7 +348,8 @@ const useGameStore = create((set, get) => ({
         pendingRoomLoad: null,
         syncRetryCount: 0,
         myUserId: guestId,
-        myUsername: guestUsername
+        myUsername: guestUsername,
+        guestUsername: localStorage.getItem('username') || ''
       })
       console.log('✅ Room left successfully')
     } catch (error) {
@@ -447,6 +458,25 @@ const useGameStore = create((set, get) => ({
         timeLeft -= 1
         set({ phaseTimer: timeLeft })
         
+        // 🆕 ADDED: Check if phase can advance early
+        if (get().canAdvancePhaseEarly()) {
+          clearInterval(interval)
+          console.log(`⚡ ${phaseName} complete early! All players submitted.`)
+          
+          const { isHost } = get()
+          if (isHost) {
+            console.log('🎯 Host triggering early phase advance...')
+            ;(async () => {
+              try {
+                await get().advancePhase()
+              } catch (error) {
+                console.error('❌ Error auto-advancing phase:', error)
+              }
+            })()
+          }
+          return
+        }
+        
         if (timeLeft <= 0) {
           clearInterval(interval)
           console.log(`⏰ ${phaseName} phase ended`)
@@ -479,6 +509,30 @@ const useGameStore = create((set, get) => ({
     return DEFAULT_PHASE_DURATIONS[phaseName] || 30
   },
 
+  // 🆕 ADDED: Check if phase can advance early
+  canAdvancePhaseEarly: () => {
+    const { gamePhase, hints, votes, participants } = get()
+    const alivePlayers = participants.filter(p => p.is_alive)
+    
+    if (gamePhase === 'HINT_DROP') {
+      const allHintsSubmitted = hints.length >= alivePlayers.length
+      if (allHintsSubmitted) {
+        console.log(`✅ All ${alivePlayers.length} players submitted hints (${hints.length} total)`)
+        return true
+      }
+    }
+    
+    if (gamePhase === 'VERDICT') {
+      const allVotesSubmitted = votes.length >= alivePlayers.length
+      if (allVotesSubmitted) {
+        console.log(`✅ All ${alivePlayers.length} players voted (${votes.length} total)`)
+        return true
+      }
+    }
+    
+    return false
+  },
+
   startPhaseTimer: (phaseName) => {
     const phase = GAME_PHASES[phaseName]
     if (!phase) return
@@ -495,6 +549,25 @@ const useGameStore = create((set, get) => ({
     const interval = setInterval(() => {
       timeLeft -= 1
       set({ phaseTimer: timeLeft })
+      
+      // 🆕 ADDED: Check if phase can advance early
+      if (get().canAdvancePhaseEarly()) {
+        clearInterval(interval)
+        console.log(`⚡ ${phaseName} complete early! All players submitted.`)
+        
+        const { isHost } = get()
+        if (isHost) {
+          console.log('🎯 Host triggering early phase advance...')
+          ;(async () => {
+            try {
+              await get().advancePhase()
+            } catch (error) {
+              console.error('❌ Error auto-advancing phase:', error)
+            }
+          })()
+        }
+        return
+      }
       
       if (timeLeft <= 0) {
         clearInterval(interval)
