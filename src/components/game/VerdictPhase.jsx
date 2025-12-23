@@ -9,6 +9,7 @@ const VerdictPhase = () => {
     votes, 
     submitVote, 
     phaseTimer,
+    gamePhase, // 🔧 FIX: Get gamePhase to check if we should show votes
     getAliveParticipants 
   } = useGameStore()
   
@@ -158,15 +159,15 @@ const VerdictPhase = () => {
         </motion.div>
       )}
 
-      {/* Vote Tally */}
-      {votes.length > 0 && (
+      {/* 🔧 FIX: Vote Tally - ONLY SHOW IN REVEAL PHASE */}
+      {gamePhase === 'REVEAL' && votes.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           data-testid="vote-tally"
           className="mt-8 bg-gray-800 border border-gray-700 rounded-xl p-6"
         >
-          <h3 className="text-white font-semibold mb-4">📊 Current Votes</h3>
+          <h3 className="text-white font-semibold mb-4">📊 Vote Results</h3>
           <div className="space-y-3">
             {Object.entries(voteTally)
               .sort(([, a], [, b]) => b - a)
