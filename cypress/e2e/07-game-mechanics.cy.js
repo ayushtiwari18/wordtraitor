@@ -18,7 +18,8 @@ describe('Phase 3: Game Mechanics', () => {
   })
 
   afterEach(() => {
-    cy.wait(7000) // Rate limit protection
+    // INCREASED: From 7s to 12s to prevent Supabase rate limiting
+    cy.wait(12000)
   })
 
   // Helper: Create room and get to game phase
@@ -59,14 +60,15 @@ describe('Phase 3: Game Mechanics', () => {
         cy.window().then((w) => {
           const player2Id = w.localStorage.getItem('guest_id')
           
-          // Switch back to host
-          cy.clearLocalStorage()
-          cy.window().then((hostWin) => {
-            hostWin.localStorage.setItem('guest_id', hostId)
-            hostWin.localStorage.setItem('username', hostUsername)
+          // FIXED: Switch back to host using onBeforeLoad
+          cy.visit(`/lobby/${roomCode}`, {
+            onBeforeLoad(win) {
+              win.localStorage.clear()
+              win.localStorage.setItem('guest_id', hostId)
+              win.localStorage.setItem('username', hostUsername)
+            }
           })
           
-          cy.visit(`/lobby/${roomCode}`)
           cy.get('[data-testid="room-code"]', { timeout: 30000 }).should('exist')
           cy.get('[data-testid="participant-item"]', { timeout: 15000 }).should('have.length', 2)
           
@@ -78,50 +80,6 @@ describe('Phase 3: Game Mechanics', () => {
           
           // Return both player IDs for test use
           cy.wrap({ hostId, player2Id, roomCode }).as('gameSetup')
-        })
-      })
-    })
-  }
-
-  // Helper: Mock game state for isolated phase testing
-  const mockGameState = (phase, overrides = {}) => {
-    cy.visit('/')
-    cy.window().then((win) => {
-      // Create mock room and game state
-      const mockRoom = {
-        id: 'test-room-id',
-        room_code: 'TEST123',
-        status: 'ACTIVE',
-        game_mode: 'SILENT',
-        difficulty: 'MEDIUM',
-        current_phase: phase,
-        ...overrides.room
-      }
-      
-      const mockParticipants = [
-        {
-          user_id: win.localStorage.getItem('guest_id'),
-          username: win.localStorage.getItem('username'),
-          role: 'CITIZEN',
-          is_alive: true
-        },
-        {
-          user_id: 'player2',
-          username: 'Player2',
-          role: 'TRAITOR',
-          is_alive: true
-        },
-        ...overrides.participants || []
-      ]
-      
-      // Inject mock data into game store
-      cy.window().its('useGameStore').then((store) => {
-        store.setState({
-          room: mockRoom,
-          participants: mockParticipants,
-          gamePhase: phase,
-          myUserId: win.localStorage.getItem('guest_id'),
-          ...overrides.state
         })
       })
     })
@@ -178,19 +136,18 @@ describe('Phase 3: Game Mechanics', () => {
       // For now, we verify that word exists and is appropriate for role
       createAndStartGame({ gameMode: 'SILENT' })
       
-      cy.get('@gameSetup').then(({ hostId, player2Id }) => {
+      cy.get('@gameSetup').then(({ hostId, player2Id, roomCode }) => {
         // Get host's word and role
         cy.get('[data-testid="player-role"]').invoke('text').then((hostRole) => {
           cy.get('[data-testid="secret-word"]').invoke('text').then((hostWord) => {
             
-            // Switch to player 2
-            cy.clearLocalStorage()
-            cy.window().then((win) => {
-              win.localStorage.setItem('guest_id', player2Id)
+            // FIXED: Switch to player 2 using onBeforeLoad
+            cy.visit(`/game/${roomCode}`, {
+              onBeforeLoad(win) {
+                win.localStorage.clear()
+                win.localStorage.setItem('guest_id', player2Id)
+              }
             })
-            
-            // Reload game page
-            cy.reload()
             
             // Get player 2's word and role
             cy.get('[data-testid="player-role"]', { timeout: 10000 }).invoke('text').then((p2Role) => {
@@ -294,8 +251,12 @@ describe('Phase 3: Game Mechanics', () => {
               .should('exist')
               .and('not.be.disabled')
           } else {
-            // Not my turn - should NOT see active input or it should be disabled
-            cy.get('[data-testid="hint-input"]').should('not.exist').or('be.disabled')
+            // FIXED: Not my turn - check properly
+            cy.get('body').then($body => {
+              if ($body.find('[data-testid="hint-input"]').length > 0) {
+                cy.get('[data-testid="hint-input"]').should('be.disabled')
+              }
+            })
           }
         })
       })
@@ -416,19 +377,20 @@ describe('Phase 3: Game Mechanics', () => {
       // This test requires switching between player views
       createAndStartGame({ gameMode: 'SILENT' })
       
-      cy.get('@gameSetup').then(({ hostId, player2Id }) => {
+      cy.get('@gameSetup').then(({ hostId, player2Id, roomCode }) => {
         // Wait for Hint Drop phase
         cy.wait(15000)
         
         // Get initial hint count
         cy.get('[data-testid="hint-progress"]', { timeout: 10000 }).invoke('text').then((progress1) => {
           
-          // Switch to player 2
-          cy.clearLocalStorage()
-          cy.window().then((win) => {
-            win.localStorage.setItem('guest_id', player2Id)
+          // FIXED: Switch to player 2 using onBeforeLoad
+          cy.visit(`/game/${roomCode}`, {
+            onBeforeLoad(win) {
+              win.localStorage.clear()
+              win.localStorage.setItem('guest_id', player2Id)
+            }
           })
-          cy.reload()
           
           // Wait for page load
           cy.get('[data-testid="hint-progress"]', { timeout: 15000 }).invoke('text').then((progress2) => {
@@ -536,10 +498,13 @@ describe('Phase 3: Game Mechanics', () => {
       cy.get('[data-testid="vote-submitted"]', { timeout: 5000 })
         .should('exist')
       
-      // Vote buttons should be disabled after voting
-      cy.get('[data-testid="vote-option"]')
-        .should('be.disabled')
-        .or('not.exist')
+      // FIXED: Vote buttons should be disabled after voting
+      cy.get('body').then($body => {
+        const voteOptions = $body.find('[data-testid="vote-option"]')
+        if (voteOptions.length > 0) {
+          cy.wrap(voteOptions).should('be.disabled')
+        }
+      })
     })
 
     it('TC075: should display all players as vote options except self', () => {
