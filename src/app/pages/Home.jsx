@@ -2,11 +2,11 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
-import { Play, Users, Sparkles, Settings, ChevronDown, ChevronUp } from 'lucide-react'
+import { Play, Users, Sparkles, Settings, ChevronDown, ChevronUp, User } from 'lucide-react'
 
 const Home = () => {
   const navigate = useNavigate()
-  const { createRoom, joinRoom } = useGameStore()
+  const { createRoom, joinRoom, guestUsername, setGuestUsername } = useGameStore()
 
   const [showJoinModal, setShowJoinModal] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -15,6 +15,7 @@ const Home = () => {
   const [isJoining, setIsJoining] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState('')
+  const [localUsername, setLocalUsername] = useState(guestUsername || '')
 
   // Basic settings
   const [gameMode, setGameMode] = useState('SILENT')
@@ -29,10 +30,45 @@ const Home = () => {
   const [verdictTime, setVerdictTime] = useState(45)
   const [revealTime, setRevealTime] = useState(15)
 
+  useEffect(() => {
+    // Load username from store on mount
+    if (guestUsername) {
+      setLocalUsername(guestUsername)
+    }
+  }, [guestUsername])
+
+  const handleUsernameChange = (newUsername) => {
+    setLocalUsername(newUsername)
+    if (newUsername.trim()) {
+      setGuestUsername(newUsername.trim())
+    }
+  }
+
+  const validateUsername = () => {
+    const username = localUsername.trim()
+    if (!username) {
+      setError('Please enter a username')
+      return false
+    }
+    if (username.length < 2) {
+      setError('Username must be at least 2 characters')
+      return false
+    }
+    if (username.length > 20) {
+      setError('Username must be less than 20 characters')
+      return false
+    }
+    return true
+  }
+
   const handleJoinRoom = async (e) => {
     e.preventDefault()
     setError('')
     
+    if (!validateUsername()) {
+      return
+    }
+
     if (!roomCode.trim()) {
       setError('Please enter a room code')
       return
@@ -41,7 +77,7 @@ const Home = () => {
     setIsJoining(true)
     
     try {
-      console.log('🚪 Joining room:', roomCode)
+      console.log('🚪 Joining room:', roomCode, 'as', localUsername)
       const room = await joinRoom(roomCode.toUpperCase())
       
       // Validate room object
@@ -74,6 +110,11 @@ const Home = () => {
   const handleCreateRoom = async (e) => {
     e.preventDefault()
     setError('')
+
+    if (!validateUsername()) {
+      return
+    }
+    
     setIsCreating(true)
     
     try {
@@ -88,7 +129,7 @@ const Home = () => {
         }
       }
       
-      console.log('🏠 Creating room with settings:', { gameMode, difficulty, wordPack, customSettings })
+      console.log('🏠 Creating room as', localUsername, 'with settings:', { gameMode, difficulty, wordPack, customSettings })
       const room = await createRoom(gameMode, difficulty, wordPack, customSettings)
       
       // Validate room object
@@ -153,6 +194,33 @@ const Home = () => {
           </p>
         </motion.div>
 
+        {/* Username Input */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-8"
+        >
+          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <User className="w-5 h-5 text-purple-400" />
+              <label className="text-white font-semibold">Your Name</label>
+            </div>
+            <input
+              type="text"
+              value={localUsername}
+              onChange={(e) => handleUsernameChange(e.target.value)}
+              placeholder="Enter your username..."
+              maxLength={20}
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+              data-testid="username-input"
+            />
+            <p className="text-gray-500 text-xs mt-2">
+              This name will be shown to other players (2-20 characters)
+            </p>
+          </div>
+        </motion.div>
+
         {/* Main Actions */}
         <div className="grid md:grid-cols-2 gap-6 mb-12">
           <motion.button
@@ -161,7 +229,8 @@ const Home = () => {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
             onClick={() => setShowCreateModal(true)}
-            className="group relative bg-gradient-to-br from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl"
+            disabled={!localUsername.trim()}
+            className="group relative bg-gradient-to-br from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl disabled:hover:scale-100"
           >
             <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
             <Sparkles className="w-12 h-12 mx-auto mb-4" />
@@ -175,7 +244,8 @@ const Home = () => {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
             onClick={() => setShowJoinModal(true)}
-            className="group relative bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl"
+            disabled={!localUsername.trim()}
+            className="group relative bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl disabled:hover:scale-100"
           >
             <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
             <Users className="w-12 h-12 mx-auto mb-4" />
@@ -235,6 +305,13 @@ const Home = () => {
             >
               <h2 className="text-2xl font-bold text-white mb-6">Join Room</h2>
               <form onSubmit={handleJoinRoom}>
+                <div className="mb-4">
+                  <label className="block text-gray-300 mb-2">Playing as</label>
+                  <div className="flex items-center gap-2 px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg">
+                    <User className="w-5 h-5 text-purple-400" />
+                    <span className="text-white font-semibold">{localUsername || 'No username'}</span>
+                  </div>
+                </div>
                 <div className="mb-6">
                   <label className="block text-gray-300 mb-2">Room Code</label>
                   <input
@@ -297,6 +374,13 @@ const Home = () => {
             >
               <h2 className="text-2xl font-bold text-white mb-6">Create Room</h2>
               <form onSubmit={handleCreateRoom}>
+                <div className="mb-4">
+                  <label className="block text-gray-300 mb-2">Playing as</label>
+                  <div className="flex items-center gap-2 px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg">
+                    <User className="w-5 h-5 text-purple-400" />
+                    <span className="text-white font-semibold">{localUsername || 'No username'}</span>
+                  </div>
+                </div>
                 <div className="mb-4">
                   <label className="block text-gray-300 mb-2">Game Mode</label>
                   <select
