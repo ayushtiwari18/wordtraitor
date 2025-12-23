@@ -14,11 +14,13 @@ const WhisperPhase = () => {
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       className="flex flex-col items-center justify-center min-h-[60vh] p-8"
+      data-testid="whisper-phase-container"
     >
       {/* Role Badge */}
       <motion.div
         initial={{ y: -20 }}
         animate={{ y: 0 }}
+        data-testid="player-role"
         className={`mb-8 px-6 py-3 rounded-full font-bold text-xl ${
           isTraitor 
             ? 'bg-red-500/20 text-red-400 border-2 border-red-500' 
@@ -38,7 +40,7 @@ const WhisperPhase = () => {
         <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 blur-2xl opacity-30 animate-pulse" />
         <div className="relative bg-gray-800/90 backdrop-blur-sm border-2 border-purple-500 rounded-2xl p-12 shadow-2xl">
           <p className="text-gray-400 text-sm mb-2 text-center">Your Secret Word</p>
-          <h2 className="text-6xl font-bold text-white text-center tracking-wider">
+          <h2 data-testid="secret-word" className="text-6xl font-bold text-white text-center tracking-wider">
             {mySecret.secret_word}
           </h2>
         </div>
@@ -71,6 +73,7 @@ const WhisperPhase = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.9 }}
+        data-testid="phase-timer"
         className="mt-8 text-4xl font-bold text-purple-400"
       >
         {phaseTimer}s
