@@ -73,8 +73,8 @@ const useGameStore = create((set, get) => ({
     }
 
     // Get from localStorage (check for empty strings too)
-    let guestId = localStorage.getItem('guestId')
-    let guestUsername = localStorage.getItem('guestUsername')
+    let guestId = localStorage.getItem('guest_id')
+    let guestUsername = localStorage.getItem('username')
     
     // Validate: regenerate if null, undefined, or empty string
     if (!guestId || guestId.trim() === '') {
@@ -88,8 +88,8 @@ const useGameStore = create((set, get) => ({
     }
     
     // Save to localStorage
-    localStorage.setItem('guestId', guestId)
-    localStorage.setItem('guestUsername', guestUsername)
+    localStorage.setItem('guest_id', guestId)
+    localStorage.setItem('username', guestUsername)
     
     // Update store
     set({ myUserId: guestId, myUsername: guestUsername })
@@ -237,8 +237,15 @@ const useGameStore = create((set, get) => ({
       const participants = await gameHelpers.getParticipants(room.id)
       console.log('👥 Participants loaded:', participants.length, 'players')
       
-      // Check if I'm already in the room
-      const alreadyJoined = participants.some(p => p.user_id === guestId)
+      // FIXED: Check if I'm already in the room MORE STRICTLY
+      const alreadyJoined = participants.some(p => {
+        // Normalize guest_id by removing prefix if present
+        const normalizedGuestId = guestId.replace('guest_', '')
+        const normalizedParticipantId = p.user_id.replace('guest_', '')
+        return p.user_id === guestId || normalizedParticipantId === normalizedGuestId
+      })
+      
+      console.log('🔍 Checking participant status: guestId=', guestId.slice(0, 20), 'alreadyJoined=', alreadyJoined)
       
       if (!alreadyJoined && room.status === 'LOBBY') {
         console.log('🆕 Not in room, auto-joining...')
@@ -250,6 +257,11 @@ const useGameStore = create((set, get) => ({
         console.log('👥 After auto-join:', updatedParticipants.length)
         set({ participants: updatedParticipants })
       } else {
+        if (alreadyJoined) {
+          console.log('✅ Already in room, skipping auto-join')
+        } else {
+          console.log('ℹ️ Room status is', room.status, ', not auto-joining')
+        }
         set({ participants })
       }
       
