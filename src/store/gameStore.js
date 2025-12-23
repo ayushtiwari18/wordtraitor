@@ -237,8 +237,9 @@ const useGameStore = create((set, get) => ({
       const participants = await gameHelpers.getParticipants(room.id)
       console.log('👥 Participants loaded:', participants.length, 'players')
       
-      // Check if I'm already in the room
+      // FIX: Check if I'm already in the room BEFORE auto-joining
       const alreadyJoined = participants.some(p => p.user_id === guestId)
+      console.log('🔍 Already joined?', alreadyJoined)
       
       if (!alreadyJoined && room.status === 'LOBBY') {
         console.log('🆕 Not in room, auto-joining...')
@@ -250,6 +251,7 @@ const useGameStore = create((set, get) => ({
         console.log('👥 After auto-join:', updatedParticipants.length)
         set({ participants: updatedParticipants })
       } else {
+        console.log('✅ Already a participant, skipping auto-join')
         set({ participants })
       }
       
