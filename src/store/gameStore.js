@@ -704,6 +704,7 @@ const useGameStore = create((set, get) => ({
 
       console.log('📊 Vote counts:', voteCounts)
       
+      // 🔧 FIX: Handle TIE scenario
       if (eliminatedId) {
         const eliminatedPlayer = participants.find(p => p.user_id === eliminatedId)
         console.log('💀 Eliminated:', eliminatedPlayer?.username)
@@ -721,14 +722,22 @@ const useGameStore = create((set, get) => ({
         const { turnOrder } = get()
         const newTurnOrder = turnOrder.filter(id => id !== eliminatedId)
         set({ turnOrder: newTurnOrder, currentTurnIndex: 0 })
+      } else {
+        console.log('🤝 Vote resulted in a tie - no elimination')
       }
 
       const gameEnd = await gameHelpers.checkGameEnd(roomId)
       
       if (gameEnd.ended) {
         console.log('🏆 Game over! Winner:', gameEnd.winner)
-        const results = { ...gameEnd, voteCounts }
-        set({ showResults: true, gameResults: results })
+        
+        // 🔧 FIX: Write game end to DB so ALL clients can see it
+        await gameHelpers.endGame(roomId, gameEnd.winner, gameEnd.traitorIds)
+        console.log('✅ Game end written to database')
+        
+        // Host also sets local state
+        const finalResults = { ...gameEnd, voteCounts }
+        set({ showResults: true, gameResults: finalResults })
         
         const { phaseInterval } = get()
         if (phaseInterval) clearInterval(phaseInterval)
@@ -784,6 +793,32 @@ const useGameStore = create((set, get) => ({
           const currentRoom = get().room
           
           set({ room: updatedRoom })
+          
+          // 🔧 FIX: Check if game ended via status change
+          if (currentRoom?.status === 'PLAYING' && updatedRoom.status === 'FINISHED') {
+            console.log('🏁 Game ended via realtime! Navigating to results...')
+            
+            // Load final game state
+            ;(async () => {
+              try {
+                const votes = await gameHelpers.getVotes(roomId)
+                const results = await gameHelpers.calculateVoteResults(roomId)
+                const gameEnd = await gameHelpers.checkGameEnd(roomId)
+                
+                const finalResults = {
+                  ended: true,
+                  winner: updatedRoom.winner || gameEnd.winner,
+                  traitorIds: gameEnd.traitorIds,
+                  voteCounts: results.voteCounts
+                }
+                
+                set({ showResults: true, gameResults: finalResults })
+                console.log('✅ Results loaded for non-host player')
+              } catch (error) {
+                console.error('❌ Error loading final results:', error)
+              }
+            })()
+          }
           
           if (updatedRoom.current_phase && updatedRoom.current_phase !== get().gamePhase) {
             console.log(`🔄 Phase changed to ${updatedRoom.current_phase} via realtime`)
