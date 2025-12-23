@@ -8,9 +8,11 @@ export default defineConfig({
     video: true,
     videoCompression: 32,
     screenshotOnRunFailure: true,
-    defaultCommandTimeout: 10000,
-    requestTimeout: 10000,
-    responseTimeout: 10000,
+    // INCREASED: Better handling of Supabase network latency
+    defaultCommandTimeout: 15000, // Increased from 10s to 15s
+    requestTimeout: 15000, // Increased from 10s to 15s
+    responseTimeout: 15000, // Increased from 10s to 15s
+    pageLoadTimeout: 30000, // Added for slow initial loads
     setupNodeEvents(on, config) {
       // implement node event listeners here
     },
