@@ -9,26 +9,50 @@ import { createClient } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import fs from 'fs'
 
-// Load environment variables from .env.local
+// Load environment variables from .env or .env.local
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const envPath = path.resolve(__dirname, '../../.env.local')
 
-// Load .env.local file
-dotenv.config({ path: envPath })
+// Try .env first, then .env.local
+const envPath = path.resolve(__dirname, '../../.env')
+const envLocalPath = path.resolve(__dirname, '../../.env.local')
+
+let loadedEnvFile = null
+
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath })
+  loadedEnvFile = '.env'
+  console.log('✅ Loaded environment from .env')
+} else if (fs.existsSync(envLocalPath)) {
+  dotenv.config({ path: envLocalPath })
+  loadedEnvFile = '.env.local'
+  console.log('✅ Loaded environment from .env.local')
+} else {
+  console.error('❌ No environment file found!')
+  console.error('Expected one of:')
+  console.error('  -', envPath)
+  console.error('  -', envLocalPath)
+}
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error('❌ Missing Supabase credentials!')
-  console.error('Expected .env.local at:', envPath)
+  console.error('Loaded from:', loadedEnvFile || 'No file loaded')
   console.error('VITE_SUPABASE_URL:', supabaseUrl ? '✅ Set' : '❌ Missing')
   console.error('SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey ? '✅ Set' : '❌ Missing')
-  throw new Error('Missing Supabase credentials. Set VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local')
+  console.error('')
+  console.error('Please add these to your .env file:')
+  console.error('VITE_SUPABASE_URL=https://ytytsdilcwxlzdstxhgo.supabase.co')
+  console.error('VITE_SUPABASE_ANON_KEY=your_anon_key')
+  console.error('SUPABASE_SERVICE_ROLE_KEY=your_service_role_key')
+  throw new Error('Missing Supabase credentials. Set VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env or .env.local')
 }
 
+console.log('✅ Supabase credentials loaded successfully')
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 export default {
