@@ -112,7 +112,7 @@ const Game = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900" data-testid="game-container">
       {/* Top Bar */}
       <div className="bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -120,10 +120,10 @@ const Game = () => {
           <div className="flex items-center gap-4">
             <div>
               <p className="text-sm text-gray-400">Room Code</p>
-              <p className="text-xl font-bold text-white">{room?.room_code}</p>
+              <p className="text-xl font-bold text-white" data-testid="game-room-code">{room?.room_code}</p>
             </div>
             {gamePhase && (
-              <div className="px-4 py-2 bg-purple-500/20 border border-purple-500 rounded-lg">
+              <div className="px-4 py-2 bg-purple-500/20 border border-purple-500 rounded-lg" data-testid="game-phase-indicator">
                 <p className="text-sm text-purple-400 font-semibold uppercase">
                   {gamePhase.replace('_', ' ')}
                 </p>
@@ -132,7 +132,7 @@ const Game = () => {
           </div>
 
           {/* Center: Players Alive */}
-          <div className="hidden md:flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2" data-testid="players-alive-counter">
             <span className="text-gray-400">👥</span>
             <span className="text-white font-semibold">
               {alivePlayers.length}/{participants.length} alive
@@ -142,6 +142,7 @@ const Game = () => {
           {/* Right: Leave Button */}
           <button
             onClick={handleLeave}
+            data-testid="leave-game-button"
             className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500 rounded-lg text-red-400 font-semibold transition-colors"
           >
             🚺 Leave
@@ -150,7 +151,7 @@ const Game = () => {
       </div>
 
       {/* Main Game Area */}
-      <div className="py-8">
+      <div className="py-8" data-testid="game-phase-content">
         <AnimatePresence mode="wait">
           <motion.div
             key={gamePhase}
