@@ -38,7 +38,7 @@ const Results = () => {
     }
   }
 
-  const handlePlayAgain = async () => {
+  const handleNewGame = async () => {
     await leaveRoom()
     navigate('/')
   }
@@ -180,10 +180,11 @@ const Results = () => {
           className="flex gap-4 justify-center"
         >
           <button
-            onClick={handlePlayAgain}
+            onClick={handleNewGame}
             className="px-8 py-4 bg-purple-600 hover:bg-purple-700 rounded-xl font-bold text-white text-lg transition-colors shadow-lg"
+            title="Create a new game room"
           >
-            🔁 Play Again
+            🆕 New Game
           </button>
           <button
             onClick={handleGoHome}
@@ -192,6 +193,10 @@ const Results = () => {
             🏠 Go Home
           </button>
         </motion.div>
+        
+        <p className="text-center text-gray-500 text-sm mt-4">
+          💡 Tip: 'New Game' will return you to the home screen to create or join another room
+        </p>
       </div>
     </div>
   )
