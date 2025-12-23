@@ -205,8 +205,34 @@ const useGameStore = create((set, get) => ({
       console.log('🎮 Room loaded:', room.room_code, 'Status:', room.status)
       
       const { roomId: currentRoomId, realtimeChannel } = get()
+      
+      // 🔧 CRITICAL FIX: Check for missing secret BEFORE early return
       if (!force && currentRoomId === room.id && realtimeChannel) {
-        console.log('⏭️ Room already loaded, skipping')
+        console.log('⏭️ Room already loaded, checking if sync needed...')
+        
+        // Even if room is loaded, check if we need game state
+        if (room.status === 'PLAYING' && room.current_phase) {
+          const { mySecret } = get()
+          if (!mySecret) {
+            console.log('🔧 Game is PLAYING but no secret! Syncing before return...')
+            set({ gamePhase: room.current_phase })
+            
+            // Sync phase timer
+            if (room.phase_started_at) {
+              get().syncPhaseTimer(room.current_phase, room.phase_started_at)
+            }
+            
+            // Trigger sync asynchronously
+            setTimeout(async () => {
+              try {
+                await get().syncGameStartWithRetry()
+              } catch (error) {
+                console.error('❌ State-based sync failed:', error)
+              }
+            }, 100)
+          }
+        }
+        
         set({ isLoading: false, pendingRoomLoad: null })
         return room
       }
@@ -247,11 +273,10 @@ const useGameStore = create((set, get) => ({
       if (room.status === 'PLAYING' && room.current_phase && room.phase_started_at) {
         get().syncPhaseTimer(room.current_phase, room.phase_started_at)
         
-        // 🔧 CRITICAL FIX: State-based sync - check if we need game state
+        // Check if we need game state
         const { mySecret } = get()
         if (!mySecret) {
           console.log('🔧 Game is PLAYING but no secret found, syncing now...')
-          // Use setTimeout to avoid blocking loadRoom
           setTimeout(async () => {
             try {
               await get().syncGameStartWithRetry()
