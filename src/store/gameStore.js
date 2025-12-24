@@ -37,6 +37,9 @@ const useGameStore = create((set, get) => ({
   votes: [],
   eliminated: [],
   
+  // 🔧 CYCLE 2 FIX: Track currentRound to eliminate N+1 queries
+  currentRound: 1,
+  
   // Custom settings
   customTimings: null,
   traitorCount: 1,
@@ -183,6 +186,7 @@ const useGameStore = create((set, get) => ({
       const participants = await gameHelpers.getParticipants(room.id)
       console.log('👥 Initial participants:', participants.length)
       
+      // 🔧 CYCLE 2 FIX: Initialize currentRound
       set({ 
         room, 
         roomId: room.id,
@@ -190,6 +194,7 @@ const useGameStore = create((set, get) => ({
         isHost: true,
         customTimings: room.custom_timings,
         traitorCount: room.traitor_count || 1,
+        currentRound: room.current_round || 1,
         isLoading: false
       })
       
@@ -222,6 +227,7 @@ const useGameStore = create((set, get) => ({
       const participants = await gameHelpers.getParticipants(room.id)
       console.log('👥 Participants after join:', participants.length)
       
+      // 🔧 CYCLE 2 FIX: Initialize currentRound
       set({ 
         room, 
         roomId: room.id,
@@ -229,6 +235,7 @@ const useGameStore = create((set, get) => ({
         isHost: false,
         customTimings: room.custom_timings,
         traitorCount: room.traitor_count || 1,
+        currentRound: room.current_round || 1,
         isLoading: false
       })
       
@@ -282,7 +289,10 @@ const useGameStore = create((set, get) => ({
           const { mySecret } = get()
           if (!mySecret) {
             console.log('🔧 Game is PLAYING but no secret! Syncing before return...')
-            set({ gamePhase: room.current_phase })
+            set({ 
+              gamePhase: room.current_phase,
+              currentRound: room.current_round || 1  // 🔧 CYCLE 2 FIX
+            })
             
             if (room.phase_started_at) {
               get().syncPhaseTimer(room.current_phase, room.phase_started_at)
@@ -338,6 +348,7 @@ const useGameStore = create((set, get) => ({
         set({ participants })
       }
       
+      // 🔧 CYCLE 2 FIX: Initialize currentRound
       set({ 
         room, 
         roomId: room.id,
@@ -345,6 +356,7 @@ const useGameStore = create((set, get) => ({
         customTimings: room.custom_timings,
         traitorCount: room.traitor_count || 1,
         gamePhase: room.current_phase || null,
+        currentRound: room.current_round || 1,
         isLoading: false,
         pendingRoomLoad: null
       })
@@ -412,6 +424,7 @@ const useGameStore = create((set, get) => ({
         traitorCount: 1,
         currentTurnIndex: 0,
         turnOrder: [],
+        currentRound: 1,  // 🔧 CYCLE 2 FIX: Reset currentRound
         chatMessages: [],
         realtimeChannel: null,
         isConnected: false,
@@ -467,6 +480,7 @@ const useGameStore = create((set, get) => ({
         gamePhase: 'WHISPER',
         turnOrder,
         currentTurnIndex: 0,
+        currentRound: 1,  // 🔧 CYCLE 2 FIX: Set currentRound on game start
         isLoading: false
       })
       
@@ -781,11 +795,12 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   submitHint: async (hintText) => {
-    const { roomId, myUserId } = get()
+    // 🔧 CYCLE 2 FIX: Pass currentRound to eliminate N+1 query
+    const { roomId, myUserId, currentRound } = get()
     console.log('💬 Submitting hint:', hintText)
     
     try {
-      await gameHelpers.submitHint(roomId, myUserId, hintText)
+      await gameHelpers.submitHint(roomId, myUserId, hintText, currentRound)
       await get().loadHints()
       console.log('✅ Hint submitted')
     } catch (error) {
@@ -796,11 +811,12 @@ const useGameStore = create((set, get) => ({
   },
   
   submitRealModeNext: async () => {
-    const { roomId, myUserId } = get()
+    // 🔧 CYCLE 2 FIX: Pass currentRound to eliminate N+1 query
+    const { roomId, myUserId, currentRound } = get()
     console.log('➡️ Real Mode: Next')
     
     try {
-      await gameHelpers.submitHint(roomId, myUserId, '[VERBAL]')
+      await gameHelpers.submitHint(roomId, myUserId, '[VERBAL]', currentRound)
       await get().loadHints()
       console.log('✅ Turn advanced')
     } catch (error) {
@@ -811,10 +827,11 @@ const useGameStore = create((set, get) => ({
   },
 
   loadHints: async () => {
-    const { roomId } = get()
+    // 🔧 CYCLE 2 FIX: Pass currentRound to eliminate N+1 query
+    const { roomId, currentRound } = get()
     
     try {
-      const hints = await gameHelpers.getHints(roomId)
+      const hints = await gameHelpers.getHints(roomId, currentRound)
       console.log('💬 Loaded', hints.length, 'hints')
       set({ hints })
     } catch (error) {
@@ -827,11 +844,12 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   sendChatMessage: async (message) => {
-    const { roomId, myUserId, myUsername } = get()
+    // 🔧 CYCLE 2 FIX: Pass currentRound to eliminate N+1 query
+    const { roomId, myUserId, myUsername, currentRound } = get()
     console.log('💬 Sending chat message:', message)
     
     try {
-      await gameHelpers.sendChatMessage(roomId, myUserId, myUsername, message)
+      await gameHelpers.sendChatMessage(roomId, myUserId, myUsername, message, currentRound)
       await get().loadChatMessages()
       console.log('✅ Chat message sent')
     } catch (error) {
@@ -842,10 +860,11 @@ const useGameStore = create((set, get) => ({
   },
   
   loadChatMessages: async () => {
-    const { roomId } = get()
+    // 🔧 CYCLE 2 FIX: Pass currentRound to eliminate N+1 query
+    const { roomId, currentRound } = get()
     
     try {
-      const messages = await gameHelpers.getChatMessages(roomId)
+      const messages = await gameHelpers.getChatMessages(roomId, currentRound)
       console.log('💬 Loaded', messages.length, 'chat messages')
       set({ chatMessages: messages })
     } catch (error) {
@@ -858,11 +877,12 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   submitVote: async (targetId) => {
-    const { roomId, myUserId } = get()
+    // 🔧 CYCLE 2 FIX: Pass currentRound to eliminate N+1 query
+    const { roomId, myUserId, currentRound } = get()
     console.log('🗳️ Submitting vote for:', targetId)
     
     try {
-      await gameHelpers.submitVote(roomId, myUserId, targetId)
+      await gameHelpers.submitVote(roomId, myUserId, targetId, currentRound)
       await get().loadVotes()
       console.log('✅ Vote submitted')
     } catch (error) {
@@ -873,10 +893,11 @@ const useGameStore = create((set, get) => ({
   },
 
   loadVotes: async () => {
-    const { roomId } = get()
+    // 🔧 CYCLE 2 FIX: Pass currentRound to eliminate N+1 query
+    const { roomId, currentRound } = get()
     
     try {
-      const votes = await gameHelpers.getVotes(roomId)
+      const votes = await gameHelpers.getVotes(roomId, currentRound)
       console.log('🗳️ Loaded', votes.length, 'votes')
       set({ votes })
     } catch (error) {
@@ -889,11 +910,12 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   checkWinConditions: async () => {
-    const { roomId, participants } = get()
+    // 🔧 CYCLE 2 FIX: Pass currentRound to eliminate N+1 query
+    const { roomId, participants, currentRound } = get()
     console.log('🎯 Checking win conditions...')
     
     try {
-      const results = await gameHelpers.calculateVoteResults(roomId)
+      const results = await gameHelpers.calculateVoteResults(roomId, currentRound)
       const { eliminatedId, voteCounts } = results
 
       console.log('📊 Vote counts:', voteCounts)
@@ -985,6 +1007,12 @@ const useGameStore = create((set, get) => ({
           const updatedRoom = payload.new
           const currentRoom = get().room
           
+          // 🔧 CYCLE 2 FIX: Update currentRound when room updates
+          if (updatedRoom.current_round !== currentRoom?.current_round) {
+            console.log(`🔄 Round updated: ${currentRoom?.current_round} → ${updatedRoom.current_round}`)
+            set({ currentRound: updatedRoom.current_round })
+          }
+          
           set({ room: updatedRoom })
           
           if (currentRoom?.status === 'PLAYING' && updatedRoom.status === 'FINISHED') {
@@ -992,8 +1020,9 @@ const useGameStore = create((set, get) => ({
             
             ;(async () => {
               try {
-                const votes = await gameHelpers.getVotes(roomId)
-                const results = await gameHelpers.calculateVoteResults(roomId)
+                const { currentRound } = get()
+                const votes = await gameHelpers.getVotes(roomId, currentRound)
+                const results = await gameHelpers.calculateVoteResults(roomId, currentRound)
                 const gameEnd = await gameHelpers.checkGameEnd(roomId)
                 
                 const finalResults = {
