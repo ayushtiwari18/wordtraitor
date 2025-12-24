@@ -1,24 +1,25 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import useGameStore from '../../store/gameStore'
 import SpinningWheel from '../SpinningWheel'
 
 const HintDropPhase = () => {
-  const { 
-    hints, 
-    participants,
-    room,
-    myUserId, 
-    submitHint,
-    submitRealModeNext,
-    phaseTimer,
-    getAliveParticipants,
-    getCurrentTurnPlayer,
-    loadHints,
-    isHost,
-    turnOrder  // 🔧 CYCLE 3 FIX: Get turnOrder directly
-  } = useGameStore()
+  // 🔧 CYCLE 4 FIX: Granular Zustand selectors (only re-render when specific data changes)
+  const hints = useGameStore(state => state.hints)
+  const participants = useGameStore(state => state.participants)
+  const room = useGameStore(state => state.room)
+  const myUserId = useGameStore(state => state.myUserId)
+  const phaseTimer = useGameStore(state => state.phaseTimer)
+  const isHost = useGameStore(state => state.isHost)
+  const turnOrder = useGameStore(state => state.turnOrder)
+  
+  // Function selectors (these don't cause re-renders)
+  const submitHint = useGameStore(state => state.submitHint)
+  const submitRealModeNext = useGameStore(state => state.submitRealModeNext)
+  const loadHints = useGameStore(state => state.loadHints)
+  const getAliveParticipants = useGameStore(state => state.getAliveParticipants)
+  const getCurrentTurnPlayer = useGameStore(state => state.getCurrentTurnPlayer)
   
   const [hintText, setHintText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -31,17 +32,15 @@ const HintDropPhase = () => {
   useEffect(() => {
     console.log('💡 HintDropPhase mounted, loading hints...')
     loadHints()
-  }, [])
+  }, [loadHints])
 
   // 🔧 CYCLE 3 FIX: Validate turnOrder in separate useEffect (not during render)
   useEffect(() => {
     const { gamePhase, syncGameStartWithRetry } = useGameStore.getState()
     
-    // Only sync if we're in HINT_DROP and turnOrder is empty
     if (gamePhase === 'HINT_DROP' && (!turnOrder || turnOrder.length === 0)) {
       console.log('⚠️ Turn order empty in HINT_DROP, auto-syncing...')
       
-      // Use async IIFE to avoid returning Promise from useEffect
       ;(async () => {
         try {
           await syncGameStartWithRetry()
@@ -51,16 +50,15 @@ const HintDropPhase = () => {
         }
       })()
     }
-  }, [turnOrder]) // Re-run if turnOrder changes
+  }, [turnOrder])
 
   useEffect(() => {
-    // Check if I've already submitted
     const myHint = hints.find(h => h.user_id === myUserId)
     setHasSubmitted(!!myHint)
   }, [hints, myUserId])
 
-  // SILENT MODE: Submit text hint
-  const handleSubmit = async (e) => {
+  // 🔧 CYCLE 4 FIX: useCallback for stable function references
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault()
     if (!hintText.trim() || isSubmitting) return
 
@@ -74,10 +72,9 @@ const HintDropPhase = () => {
     } finally {
       setIsSubmitting(false)
     }
-  }
+  }, [hintText, isSubmitting, submitHint])
   
-  // REAL MODE: Mark current speaker as done (legacy manual next)
-  const handleRealModeNext = async () => {
+  const handleRealModeNext = useCallback(async () => {
     if (isSubmitting) return
     
     setIsSubmitting(true)
@@ -89,43 +86,58 @@ const HintDropPhase = () => {
     } finally {
       setIsSubmitting(false)
     }
-  }
+  }, [isSubmitting, submitRealModeNext])
 
-  // REAL MODE: Wheel spin complete callback
-  const handleSpinComplete = (selectedPlayer) => {
+  const handleSpinComplete = useCallback((selectedPlayer) => {
     console.log('🎯 Wheel selected:', selectedPlayer.username)
     setCurrentSpeaker(selectedPlayer)
     setIsSpinning(false)
-    
-    // Mark this player as having spoken
     setCompletedPlayerIds(prev => [...prev, selectedPlayer.user_id])
-  }
+  }, [])
 
-  // REAL MODE: Host marks current speaker as done and resets for next spin
-  const handleMarkComplete = () => {
+  const handleMarkComplete = useCallback(() => {
     if (!currentSpeaker) return
     
     console.log('✅ Marking complete:', currentSpeaker.username)
     setCurrentSpeaker(null)
     
-    // Check if all players have gone
     const alivePlayers = getAliveParticipants()
     if (completedPlayerIds.length + 1 >= alivePlayers.length) {
       console.log('🎉 All players completed! Host will advance to VERDICT')
     }
-  }
+  }, [currentSpeaker, completedPlayerIds.length, getAliveParticipants])
 
-  const alivePlayers = getAliveParticipants()
-  const submittedCount = hints.length
-  const totalCount = alivePlayers.length
-  const isSilentMode = room?.game_mode === 'SILENT'
-  const isRealMode = room?.game_mode === 'REAL'
+  // 🔧 CYCLE 4 FIX: useMemo for expensive derived state
+  const alivePlayers = useMemo(() => {
+    return getAliveParticipants()
+  }, [participants])
   
-  // 🔧 CYCLE 3 FIX: Calculate isMyTurn directly without calling state-updating function
-  const currentTurnIndex = hints.length % (turnOrder?.length || 1)
-  const currentUserId = turnOrder?.[currentTurnIndex]
-  const isMyTurn = currentUserId === myUserId
-  const currentPlayer = getCurrentTurnPlayer()
+  const submittedCount = useMemo(() => hints.length, [hints.length])
+  const totalCount = useMemo(() => alivePlayers.length, [alivePlayers.length])
+  
+  const isSilentMode = useMemo(() => room?.game_mode === 'SILENT', [room?.game_mode])
+  const isRealMode = useMemo(() => room?.game_mode === 'REAL', [room?.game_mode])
+  
+  // 🔧 CYCLE 4 FIX: Memoize turn calculations
+  const currentTurnIndex = useMemo(
+    () => hints.length % (turnOrder?.length || 1),
+    [hints.length, turnOrder?.length]
+  )
+  
+  const currentUserId = useMemo(
+    () => turnOrder?.[currentTurnIndex],
+    [turnOrder, currentTurnIndex]
+  )
+  
+  const isMyTurn = useMemo(
+    () => currentUserId === myUserId,
+    [currentUserId, myUserId]
+  )
+  
+  const currentPlayer = useMemo(
+    () => getCurrentTurnPlayer(),
+    [participants, turnOrder, hints.length]
+  )
 
   return (
     <div className="max-w-4xl mx-auto p-6" data-testid="hint-drop-phase-container">
@@ -156,7 +168,7 @@ const HintDropPhase = () => {
         </div>
       </div>
 
-      {/* ✨ NEW: REAL MODE - Spinning Wheel */}
+      {/* ✨ REAL MODE - Spinning Wheel */}
       {isRealMode && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -171,7 +183,6 @@ const HintDropPhase = () => {
             isSpinning={isSpinning}
           />
 
-          {/* Current Speaker Info (after wheel selects) */}
           {currentSpeaker && !isSpinning && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -185,7 +196,6 @@ const HintDropPhase = () => {
                 }
               </p>
 
-              {/* Host: Mark Complete Button */}
               {isHost && (
                 <button
                   onClick={handleMarkComplete}
@@ -196,7 +206,6 @@ const HintDropPhase = () => {
                 </button>
               )}
 
-              {/* Non-Host: Waiting */}
               {!isHost && (
                 <p className="text-sm text-gray-400">
                   Waiting for host to advance...
@@ -205,7 +214,6 @@ const HintDropPhase = () => {
             </motion.div>
           )}
 
-          {/* Instructions */}
           <div className="mt-6 bg-blue-500/10 border border-blue-500 rounded-xl p-4">
             <h3 className="text-blue-400 font-semibold mb-2">🎯 How It Works</h3>
             <ul className="text-sm text-gray-300 space-y-1">
@@ -322,45 +330,12 @@ const HintDropPhase = () => {
 
       {/* SILENT MODE: Player Status Grid */}
       {isSilentMode && (
-        <div data-testid="player-status-grid" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          <AnimatePresence>
-            {alivePlayers.map((player, index) => {
-              const hasSubmitted = hints.some(h => h.user_id === player.user_id)
-              const isMe = player.user_id === myUserId
-              const isCurrentTurn = currentPlayer?.user_id === player.user_id
-              
-              return (
-                <motion.div
-                  key={player.user_id}
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  data-testid="player-status-item"
-                  className={`p-4 rounded-lg border-2 transition-all ${
-                    hasSubmitted
-                      ? 'bg-green-500/10 border-green-500'
-                      : isCurrentTurn
-                      ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-400 animate-pulse'
-                      : 'bg-gray-800 border-gray-700'
-                  } ${isMe ? 'ring-2 ring-blue-500' : ''}`}
-                >
-                  <div className="text-center">
-                    <div className="text-2xl mb-2">
-                      {hasSubmitted ? '✓' : isCurrentTurn ? '👉' : '⏳'}
-                    </div>
-                    <p className="text-sm text-gray-300 truncate">
-                      {player.username || `Player ${player.user_id.slice(0, 6)}`}
-                    </p>
-                    {isMe && <p className="text-xs text-blue-400 mt-1">You</p>}
-                    {isCurrentTurn && !hasSubmitted && (
-                      <p className="text-xs text-purple-400 mt-1">Turn</p>
-                    )}
-                  </div>
-                </motion.div>
-              )
-            })}
-          </AnimatePresence>
-        </div>
+        <PlayerStatusGrid 
+          alivePlayers={alivePlayers}
+          hints={hints}
+          myUserId={myUserId}
+          currentPlayer={currentPlayer}
+        />
       )}
 
       {/* SILENT MODE: Instructions */}
@@ -382,5 +357,52 @@ const HintDropPhase = () => {
     </div>
   )
 }
+
+// 🔧 CYCLE 4 FIX: Extract PlayerStatusGrid to separate component for easier memoization
+const PlayerStatusGrid = React.memo(({ alivePlayers, hints, myUserId, currentPlayer }) => {
+  return (
+    <div data-testid="player-status-grid" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+      <AnimatePresence>
+        {alivePlayers.map((player) => {
+          const hasSubmitted = hints.some(h => h.user_id === player.user_id)
+          const isMe = player.user_id === myUserId
+          const isCurrentTurn = currentPlayer?.user_id === player.user_id
+          
+          return (
+            <motion.div
+              key={player.user_id}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              data-testid="player-status-item"
+              className={`p-4 rounded-lg border-2 transition-all ${
+                hasSubmitted
+                  ? 'bg-green-500/10 border-green-500'
+                  : isCurrentTurn
+                  ? 'bg-purple-500/10 border-purple-500 ring-2 ring-purple-400 animate-pulse'
+                  : 'bg-gray-800 border-gray-700'
+              } ${isMe ? 'ring-2 ring-blue-500' : ''}`}
+            >
+              <div className="text-center">
+                <div className="text-2xl mb-2">
+                  {hasSubmitted ? '✓' : isCurrentTurn ? '👉' : '⏳'}
+                </div>
+                <p className="text-sm text-gray-300 truncate">
+                  {player.username || `Player ${player.user_id.slice(0, 6)}`}
+                </p>
+                {isMe && <p className="text-xs text-blue-400 mt-1">You</p>}
+                {isCurrentTurn && !hasSubmitted && (
+                  <p className="text-xs text-purple-400 mt-1">Turn</p>
+                )}
+              </div>
+            </motion.div>
+          )
+        })}
+      </AnimatePresence>
+    </div>
+  )
+})
+
+PlayerStatusGrid.displayName = 'PlayerStatusGrid'
 
 export default HintDropPhase
