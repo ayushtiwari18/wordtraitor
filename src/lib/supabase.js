@@ -466,21 +466,28 @@ export const gameHelpers = {
     return row
   },
 
-  submitHint: async (roomId, userId, hintText) => {
+  // 🔧 CYCLE 2 FIX: Eliminate N+1 query - accept currentRound parameter
+  submitHint: async (roomId, userId, hintText, currentRound = null) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    const { data: room } = await supabase
-      .from('game_rooms')
-      .select('current_round')
-      .eq('id', roomId)
-      .single()
+    // 🔧 OPTIMIZATION: Use passed currentRound if available, avoiding extra query
+    let roundNumber = currentRound
+    if (!roundNumber) {
+      console.log('⚠️ submitHint: currentRound not provided, falling back to query')
+      const { data: room } = await supabase
+        .from('game_rooms')
+        .select('current_round')
+        .eq('id', roomId)
+        .single()
+      roundNumber = room.current_round
+    }
     
     const { data, error } = await supabase
       .from('game_hints')
       .insert({
         room_id: roomId,
         user_id: userId,
-        round_number: room.current_round,
+        round_number: roundNumber,
         hint_text: hintText
       })
       .select()
@@ -490,34 +497,48 @@ export const gameHelpers = {
     return data
   },
 
-  getHints: async (roomId) => {
+  // 🔧 CYCLE 2 FIX: Eliminate N+1 query - accept currentRound parameter
+  getHints: async (roomId, currentRound = null) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    const { data: room } = await supabase
-      .from('game_rooms')
-      .select('current_round')
-      .eq('id', roomId)
-      .single()
+    // 🔧 OPTIMIZATION: Use passed currentRound if available, avoiding extra query
+    let roundNumber = currentRound
+    if (!roundNumber) {
+      console.log('⚠️ getHints: currentRound not provided, falling back to query')
+      const { data: room } = await supabase
+        .from('game_rooms')
+        .select('current_round')
+        .eq('id', roomId)
+        .single()
+      roundNumber = room.current_round
+    }
     
     const { data, error } = await supabase
       .from('game_hints')
       .select('*')
       .eq('room_id', roomId)
-      .eq('round_number', room.current_round)
+      .eq('round_number', roundNumber)
       .order('submitted_at')
     
     if (error) throw error
     return data
   },
 
-  sendChatMessage: async (roomId, userId, username, message) => {
+  // 🔧 CYCLE 2 FIX: Eliminate N+1 query - accept currentRound parameter
+  sendChatMessage: async (roomId, userId, username, message, currentRound = null) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    const { data: room } = await supabase
-      .from('game_rooms')
-      .select('current_round')
-      .eq('id', roomId)
-      .single()
+    // 🔧 OPTIMIZATION: Use passed currentRound if available, avoiding extra query
+    let roundNumber = currentRound
+    if (!roundNumber) {
+      console.log('⚠️ sendChatMessage: currentRound not provided, falling back to query')
+      const { data: room } = await supabase
+        .from('game_rooms')
+        .select('current_round')
+        .eq('id', roomId)
+        .single()
+      roundNumber = room.current_round
+    }
     
     const { data, error } = await supabase
       .from('chat_messages')
@@ -526,7 +547,7 @@ export const gameHelpers = {
         user_id: userId,
         username: username,
         message: message,
-        round_number: room.current_round
+        round_number: roundNumber
       })
       .select()
       .single()
@@ -535,40 +556,54 @@ export const gameHelpers = {
     return data
   },
 
-  getChatMessages: async (roomId) => {
+  // 🔧 CYCLE 2 FIX: Eliminate N+1 query - accept currentRound parameter
+  getChatMessages: async (roomId, currentRound = null) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    const { data: room } = await supabase
-      .from('game_rooms')
-      .select('current_round')
-      .eq('id', roomId)
-      .single()
+    // 🔧 OPTIMIZATION: Use passed currentRound if available, avoiding extra query
+    let roundNumber = currentRound
+    if (!roundNumber) {
+      console.log('⚠️ getChatMessages: currentRound not provided, falling back to query')
+      const { data: room } = await supabase
+        .from('game_rooms')
+        .select('current_round')
+        .eq('id', roomId)
+        .single()
+      roundNumber = room.current_round
+    }
     
     const { data, error } = await supabase
       .from('chat_messages')
       .select('*')
       .eq('room_id', roomId)
-      .eq('round_number', room.current_round)
+      .eq('round_number', roundNumber)
       .order('created_at')
     
     if (error) throw error
     return data || []
   },
 
-  submitVote: async (roomId, voterId, targetId) => {
+  // 🔧 CYCLE 2 FIX: Eliminate N+1 query - accept currentRound parameter
+  submitVote: async (roomId, voterId, targetId, currentRound = null) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    const { data: room } = await supabase
-      .from('game_rooms')
-      .select('current_round')
-      .eq('id', roomId)
-      .single()
+    // 🔧 OPTIMIZATION: Use passed currentRound if available, avoiding extra query
+    let roundNumber = currentRound
+    if (!roundNumber) {
+      console.log('⚠️ submitVote: currentRound not provided, falling back to query')
+      const { data: room } = await supabase
+        .from('game_rooms')
+        .select('current_round')
+        .eq('id', roomId)
+        .single()
+      roundNumber = room.current_round
+    }
     
     const { data, error } = await supabase
       .from('game_votes')
       .insert({
         room_id: roomId,
-        round_number: room.current_round,
+        round_number: roundNumber,
         voter_id: voterId,
         target_id: targetId
       })
@@ -579,27 +614,34 @@ export const gameHelpers = {
     return data
   },
 
-  getVotes: async (roomId) => {
+  // 🔧 CYCLE 2 FIX: Eliminate N+1 query - accept currentRound parameter
+  getVotes: async (roomId, currentRound = null) => {
     if (!supabase) throw new Error('Supabase not configured')
     
-    const { data: room } = await supabase
-      .from('game_rooms')
-      .select('current_round')
-      .eq('id', roomId)
-      .single()
+    // 🔧 OPTIMIZATION: Use passed currentRound if available, avoiding extra query
+    let roundNumber = currentRound
+    if (!roundNumber) {
+      console.log('⚠️ getVotes: currentRound not provided, falling back to query')
+      const { data: room } = await supabase
+        .from('game_rooms')
+        .select('current_round')
+        .eq('id', roomId)
+        .single()
+      roundNumber = room.current_round
+    }
     
     const { data, error } = await supabase
       .from('game_votes')
       .select('*')
       .eq('room_id', roomId)
-      .eq('round_number', room.current_round)
+      .eq('round_number', roundNumber)
     
     if (error) throw error
     return data
   },
 
-  calculateVoteResults: async (roomId) => {
-    const votes = await gameHelpers.getVotes(roomId)
+  calculateVoteResults: async (roomId, currentRound = null) => {
+    const votes = await gameHelpers.getVotes(roomId, currentRound)
     
     const voteCounts = {}
     votes.forEach(vote => {
