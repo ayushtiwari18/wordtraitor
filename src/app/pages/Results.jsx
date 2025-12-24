@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
 import { supabase } from '../../lib/supabase'
 import confetti from 'canvas-confetti'
@@ -17,9 +17,10 @@ const Results = () => {
     // Fire confetti
     setTimeout(() => {
       confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 }
+        particleCount: 150,
+        spread: 90,
+        origin: { y: 0.6 },
+        colors: ['#9333ea', '#ec4899', '#3b82f6', '#10b981']
       })
     }, 500)
 
@@ -103,48 +104,74 @@ const Results = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 py-12 px-4">
       <div className="max-w-4xl mx-auto">
-        {/* Winner Announcement */}
+        {/* Winner Announcement - ENHANCED */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
+          initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ type: 'spring', duration: 0.8 }}
+          transition={{ type: 'spring', duration: 1, bounce: 0.4 }}
           className="text-center mb-12"
         >
-          <div className="text-8xl mb-6">
+          <motion.div 
+            className="text-9xl mb-6"
+            animate={{ rotate: [0, -10, 10, -10, 10, 0] }}
+            transition={{ delay: 0.5, duration: 0.6 }}
+          >
             {winner === 'TRAITOR' ? '🕵️' : '🏆'}
-          </div>
-          <h1 className="text-5xl font-bold text-white mb-4">
+          </motion.div>
+          <h1 className="text-6xl font-bold text-white mb-4">
             {winner === 'TRAITOR' ? 'Traitor Wins!' : 'Citizens Win!'}
           </h1>
-          <p className="text-2xl text-gray-400">
+          
+          {/* NEW: Personalized victory message */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
             {didIWin ? (
-              <span className="text-green-400 font-bold">You won! 🎉</span>
+              <div>
+                <p className="text-3xl text-green-400 font-bold mb-2">✨ Victory! ✨</p>
+                <p className="text-gray-400 text-lg">
+                  {wasITraitor 
+                    ? 'Deception is an art. You mastered it. 🎭'
+                    : 'Justice prevails. The traitor has been caught! ⚖️'
+                  }
+                </p>
+              </div>
             ) : (
-              <span className="text-red-400">You lost!</span>
+              <div>
+                <p className="text-3xl text-red-400 font-bold mb-2">😔 Defeat...</p>
+                <p className="text-gray-400 text-lg">
+                  {wasITraitor
+                    ? 'You were exposed. Better luck deceiving next time. 🕵️'
+                    : 'The traitor escaped. Trust was misplaced. 🚫'
+                  }
+                </p>
+              </div>
             )}
-          </p>
+          </motion.div>
         </motion.div>
 
-        {/* Traitor Reveal */}
+        {/* Traitor Reveal - ENHANCED */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="bg-gray-800 border-2 border-red-500 rounded-2xl p-8 mb-8"
+          className="bg-gray-800 border-2 border-red-500 rounded-2xl p-8 mb-8 glow-red-sm"
         >
           <div className="text-center">
-            <p className="text-gray-400 mb-3">The traitor was...</p>
+            <p className="text-gray-400 mb-3 text-lg">The traitor was...</p>
             <div className="flex items-center justify-center gap-4 mb-4">
               <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center text-3xl border-2 border-red-500">
                 {traitorDetails?.username?.charAt(0).toUpperCase() || '?'}
               </div>
               <div className="text-left">
-                <h2 className="text-3xl font-bold text-white">
+                <h2 className="text-4xl font-bold text-white">
                   {traitorDetails?.username || 'Unknown Player'}
                 </h2>
-                <p className="text-red-400 font-semibold">
-                  {wasITraitor ? '(You!)' : ''}
-                </p>
+                {wasITraitor && (
+                  <p className="text-red-400 font-semibold text-lg">(That's you!) 😈</p>
+                )}
               </div>
             </div>
             {mySecret && (
@@ -224,30 +251,60 @@ const Results = () => {
           </div>
         </motion.div>
 
-        {/* Action Buttons */}
+        {/* NEW: Game Tips Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
+          className="bg-blue-500/10 border-2 border-blue-500 rounded-2xl p-6 mb-8"
+        >
+          <h3 className="text-xl font-bold text-blue-400 mb-4 text-center">💡 Strategy Tips for Next Game</h3>
+          <div className="grid md:grid-cols-2 gap-4 text-sm">
+            <div className="bg-gray-900 rounded-lg p-4">
+              <p className="text-blue-400 font-bold mb-2">👤 As a Citizen:</p>
+              <ul className="text-gray-300 space-y-1">
+                <li>• Watch for vague or suspicious hints</li>
+                <li>• Compare hints to find patterns</li>
+                <li>• Traitors may give hints that fit multiple words</li>
+                <li>• Trust your instincts but verify with others</li>
+              </ul>
+            </div>
+            <div className="bg-gray-900 rounded-lg p-4">
+              <p className="text-red-400 font-bold mb-2">🕵️ As a Traitor:</p>
+              <ul className="text-gray-300 space-y-1">
+                <li>• Give hints that could apply to both words</li>
+                <li>• Blend in by matching others' hint style</li>
+                <li>• Don't be too vague or you'll stand out</li>
+                <li>• Accuse others strategically during voting</li>
+              </ul>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Action Buttons - ENHANCED */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.9 }}
           className="flex gap-4 justify-center"
         >
           <button
             onClick={handleNewGame}
-            className="px-8 py-4 bg-purple-600 hover:bg-purple-700 rounded-xl font-bold text-white text-lg transition-colors shadow-lg"
-            title="Create a new game room"
+            className="px-8 py-4 bg-purple-600 hover:bg-purple-700 rounded-xl font-bold text-white text-lg transition-colors shadow-lg glow-purple-sm"
+            title="Return home to create or join another game"
           >
-            🆕 New Game
+            🎭 Play Again
           </button>
           <button
             onClick={handleGoHome}
             className="px-8 py-4 bg-gray-700 hover:bg-gray-600 rounded-xl font-bold text-white text-lg transition-colors"
           >
-            🏠 Go Home
+            🏠 Home
           </button>
         </motion.div>
         
         <p className="text-center text-gray-500 text-sm mt-4">
-          💡 Tip: 'New Game' will return you to the home screen to create or join another room
+          🎮 Ready for another round of deception?
         </p>
       </div>
     </div>
