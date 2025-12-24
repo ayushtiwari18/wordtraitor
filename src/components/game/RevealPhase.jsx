@@ -2,28 +2,27 @@ import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
 import { gameHelpers } from '../../lib/supabase'
-import Spinner from '../Spinner'
 
 const RevealPhase = () => {
-  const { roomId, room, votes, participants, phaseTimer } = useGameStore()
+  const { roomId, room, votes, participants, phaseTimer, eliminated } = useGameStore()
   const [voteResults, setVoteResults] = useState(null)
-  const [eliminatedPlayer, setEliminatedPlayer] = useState(null)
   const [loading, setLoading] = useState(true)
+  
+  // Reveal sequence state (0-4)
   const [revealStep, setRevealStep] = useState(0)
-  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
     calculateResults()
-  }, [votes, roomId])
+  }, [votes])
 
   // Timed reveal sequence
   useEffect(() => {
-    if (!voteResults || loading || !eliminatedPlayer) return
+    if (!voteResults || loading) return
     
-    const timer1 = setTimeout(() => setRevealStep(1), 1000)
-    const timer2 = setTimeout(() => setRevealStep(2), 2500)
-    const timer3 = setTimeout(() => setRevealStep(3), 4000)
-    const timer4 = setTimeout(() => setRevealStep(4), 5500)
+    const timer1 = setTimeout(() => setRevealStep(1), 1000) // "Counting votes..." -> "The accused is..."
+    const timer2 = setTimeout(() => setRevealStep(2), 2500) // Show name
+    const timer3 = setTimeout(() => setRevealStep(3), 4000) // Show role/word
+    const timer4 = setTimeout(() => setRevealStep(4), 5500) // Show all votes
     
     return () => {
       clearTimeout(timer1)
@@ -31,35 +30,20 @@ const RevealPhase = () => {
       clearTimeout(timer3)
       clearTimeout(timer4)
     }
-  }, [voteResults, loading, eliminatedPlayer])
+  }, [voteResults, loading])
 
   const calculateResults = async () => {
     if (!roomId || !room) {
-      console.warn('⚠️ Room not loaded, waiting...')
-      if (retryCount < 3) {
-        setTimeout(() => {
-          setRetryCount(prev => prev + 1)
-        }, 1000)
-      }
+      console.warn('⚠️ Room not loaded, skipping results')
+      setVoteResults({ error: 'Room not loaded' })
+      setLoading(false)
       return
     }
     
     try {
       setLoading(true)
-      console.log('📊 Calculating vote results for room:', roomId)
-      
       const results = await gameHelpers.calculateVoteResults(roomId)
-      console.log('✅ Vote results:', results)
-      
       setVoteResults(results)
-      
-      // Find eliminated player from participants
-      if (results?.eliminatedId) {
-        const eliminated = participants.find(p => p.user_id === results.eliminatedId)
-        console.log('💀 Eliminated player:', eliminated)
-        setEliminatedPlayer(eliminated)
-      }
-      
       setLoading(false)
     } catch (error) {
       console.error('❌ Error calculating results:', error)
@@ -71,28 +55,12 @@ const RevealPhase = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Spinner size="lg" variant="cyan" text="Calculating results..." />
+        <div className="text-2xl text-purple-400 animate-pulse">Calculating results...</div>
       </div>
     )
   }
 
-  if (voteResults?.error) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <p className="text-red-400 text-xl mb-2">❌ Error</p>
-          <p className="text-gray-400">{voteResults.error}</p>
-          <button 
-            onClick={calculateResults}
-            className="mt-4 px-4 py-2 bg-neon-cyan text-dark-bg rounded-lg hover:bg-cyan-400 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
-
+  const eliminatedPlayer = participants.find(p => p.user_id === voteResults?.eliminatedId)
   const voteCounts = voteResults?.voteCounts || {}
   const sortedVotes = Object.entries(voteCounts).sort((a, b) => b[1] - a[1])
 
@@ -138,7 +106,7 @@ const RevealPhase = () => {
         <div className="mt-4 text-2xl font-bold text-purple-400">{phaseTimer}s</div>
       </div>
 
-      {/* Eliminated Player Card */}
+      {/* STEP 2: Show eliminated player name */}
       {revealStep >= 2 && eliminatedPlayer && (
         <motion.div
           initial={{ opacity: 0, scale: 0.5 }}
@@ -148,7 +116,7 @@ const RevealPhase = () => {
             rotate: revealStep === 2 ? [0, -5, 5, -5, 5, 0] : 0
           }}
           transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-          className="mb-8 bg-gradient-to-r from-red-900/50 to-purple-900/50 border-2 border-red-500 rounded-2xl p-8 text-center shadow-2xl shadow-red-500/20"
+          className="mb-8 bg-gradient-to-r from-red-900/50 to-purple-900/50 border-2 border-red-500 rounded-2xl p-8 text-center"
         >
           <div className="text-6xl mb-4">💀</div>
           <h3 className="text-3xl font-bold text-white mb-2">
@@ -156,7 +124,7 @@ const RevealPhase = () => {
           </h3>
           <p className="text-xl text-red-400 font-semibold">has been eliminated!</p>
           
-          {/* Role and Word Reveal */}
+          {/* STEP 3: Show role and secret word */}
           <AnimatePresence>
             {revealStep >= 3 && (
               <motion.div
@@ -165,24 +133,27 @@ const RevealPhase = () => {
                 transition={{ delay: 0.3 }}
                 className="mt-6 pt-6 border-t border-gray-700"
               >
+                {/* Role Badge */}
                 <div className={`inline-block px-6 py-2 rounded-full font-bold text-lg mb-4 ${
-                  eliminatedPlayer.role === 'TRAITOR'
+                  eliminated?.role === 'TRAITOR'
                     ? 'bg-red-500/20 text-red-400 border-2 border-red-500'
                     : 'bg-blue-500/20 text-blue-400 border-2 border-blue-500'
                 }`}>
-                  {eliminatedPlayer.role === 'TRAITOR' ? '🕵️ They were the TRAITOR!' : '👤 They were a CITIZEN...'}
+                  {eliminated?.role === 'TRAITOR' ? '🕵️ They were the TRAITOR!' : '👤 They were a CITIZEN...'}
                 </div>
                 
+                {/* Secret Word */}
                 <div className="mt-4">
                   <p className="text-gray-400 text-sm mb-2">Their word was:</p>
                   <div className="inline-block bg-gray-900 border-2 border-purple-500 rounded-lg px-6 py-3">
                     <span className="text-3xl font-bold text-purple-400">
-                      {eliminatedPlayer.secret_word || 'Unknown'}
+                      {eliminated?.secret_word || 'Unknown'}
                     </span>
                   </div>
                 </div>
                 
-                {eliminatedPlayer.role === 'TRAITOR' && (
+                {/* Reaction message */}
+                {eliminated?.role === 'TRAITOR' && (
                   <motion.p
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -192,7 +163,7 @@ const RevealPhase = () => {
                     ✅ Citizens Win! The traitor has been caught!
                   </motion.p>
                 )}
-                {eliminatedPlayer.role === 'CITIZEN' && (
+                {eliminated?.role === 'CITIZEN' && (
                   <motion.p
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -222,8 +193,8 @@ const RevealPhase = () => {
         </motion.div>
       )}
 
-      {/* Vote Breakdown */}
-      {revealStep >= 4 && sortedVotes.length > 0 && (
+      {/* STEP 4: Vote Results */}
+      {revealStep >= 4 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
