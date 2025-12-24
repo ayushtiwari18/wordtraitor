@@ -28,7 +28,7 @@ const HintDropPhase = () => {
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [currentPlayer, setCurrentPlayer] = useState(null)  // ✅ BUG FIX #7: Local state instead of derived
 
-  // Load hints when component mounts
+  // Load hints when component mounts (critical for REAL mode sync)
   useEffect(() => {
     console.log('💡 HintDropPhase mounted, loading hints...')
     loadHints()
@@ -70,7 +70,7 @@ const HintDropPhase = () => {
     setHasSubmitted(!!myHint)
   }, [hints, myUserId])
 
-  // ✅ NEW FIX: Sync completedPlayerIds from hints (for REAL mode persistence)
+  // ✅ BUG FIX #2: Sync completedPlayerIds from hints (for REAL mode persistence & Player 2 sync)
   useEffect(() => {
     if (room?.game_mode === 'REAL') {
       // Extract user IDs who have submitted [VERBAL] hints
@@ -125,7 +125,7 @@ const HintDropPhase = () => {
     // ✅ FIX: Persist completion via database (submit [VERBAL] hint)
     try {
       setIsSubmitting(true)
-      const { submitHint, roomId, currentRound } = useGameStore.getState()
+      const { roomId, currentRound } = useGameStore.getState()
       const { gameHelpers } = await import('../../lib/supabase')
       
       // Submit [VERBAL] hint to mark player as complete
@@ -139,22 +139,18 @@ const HintDropPhase = () => {
       
       console.log(`✅ Completion persisted for ${currentSpeaker.username}`)
       
-      // Check if all players completed
-      const alivePlayers = getAliveParticipants()
-      const newCompletedCount = completedPlayerIds.length + 1
+      // ✅ BUG FIX #1: REMOVED manual advancePhase() call
+      // The interval's canAdvancePhaseEarly() already handles this!
+      // Previously this caused DEBATE to be skipped because:
+      // 1. Interval detected completion -> advanced HINT_DROP to DEBATE
+      // 2. This setTimeout fired 1.5s later -> advanced DEBATE to VERDICT (BUG!)
+      // Now we trust the interval system to handle phase transitions.
       
-      if (newCompletedCount >= alivePlayers.length && isHost) {
-        console.log('🎉 All players completed! Auto-advancing to next phase...')
-        setTimeout(() => {
-          const { advancePhase } = useGameStore.getState()
-          advancePhase()
-        }, 1500) // 1.5s delay for visual feedback
-      }
     } catch (error) {
       console.error('❌ Error persisting completion:', error)
       setIsSubmitting(false)
     }
-  }, [currentSpeaker, completedPlayerIds, getAliveParticipants, isHost, loadHints])
+  }, [currentSpeaker, loadHints])
 
   // 🔧 CYCLE 4 FIX: useMemo for expensive derived state
   const alivePlayers = useMemo(() => {
@@ -270,7 +266,7 @@ const HintDropPhase = () => {
               <li>• Selected player speaks their hint out loud (voice chat)</li>
               <li>• Host clicks "Done" when ready for the next player</li>
               <li>• Each player speaks exactly once (no repeats)</li>
-              <li>• After everyone speaks, voting begins!</li>
+              <li>• After everyone speaks, phase advances automatically!</li>
             </ul>
           </div>
         </motion.div>
