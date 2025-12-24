@@ -77,7 +77,7 @@ const Home = () => {
     setIsJoining(true)
     
     try {
-      console.log('🚪 Joining room:', roomCode, 'as', localUsername)
+      console.log('🚺 Joining room:', roomCode, 'as', localUsername)
       const room = await joinRoom(roomCode.toUpperCase())
       
       // Validate room object
@@ -444,7 +444,6 @@ const Home = () => {
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
                       transition={{ duration: 0.3 }}
-                      className="overflow-hidden"
                     >
                       <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-4 space-y-4">
                         <div>
@@ -453,11 +452,14 @@ const Home = () => {
                           </label>
                           <input
                             type="number"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                             min="1"
                             max="3"
                             value={traitorCount}
                             onChange={(e) => setTraitorCount(parseInt(e.target.value) || 1)}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
+                            onClick={(e) => e.target.select()}
+                            className="w-full min-h-[44px] bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500 touch-manipulation"
                           />
                         </div>
 
@@ -469,11 +471,14 @@ const Home = () => {
                               <label className="text-gray-400 text-xs">Whisper Phase</label>
                               <input
                                 type="number"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 min="10"
                                 max="300"
                                 value={whisperTime}
                                 onChange={(e) => setWhisperTime(parseInt(e.target.value) || 30)}
-                                className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                                onClick={(e) => e.target.select()}
+                                className="w-20 min-h-[44px] bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500 touch-manipulation"
                               />
                             </div>
                             
@@ -481,11 +486,14 @@ const Home = () => {
                               <label className="text-gray-400 text-xs">Hint Drop Phase</label>
                               <input
                                 type="number"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 min="10"
                                 max="300"
                                 value={hintDropTime}
                                 onChange={(e) => setHintDropTime(parseInt(e.target.value) || 60)}
-                                className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                                onClick={(e) => e.target.select()}
+                                className="w-20 min-h-[44px] bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500 touch-manipulation"
                               />
                             </div>
                             
@@ -493,11 +501,14 @@ const Home = () => {
                               <label className="text-gray-400 text-xs">Debate Phase</label>
                               <input
                                 type="number"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 min="10"
                                 max="600"
                                 value={debateTime}
                                 onChange={(e) => setDebateTime(parseInt(e.target.value) || 120)}
-                                className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                                onClick={(e) => e.target.select()}
+                                className="w-20 min-h-[44px] bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500 touch-manipulation"
                               />
                             </div>
                             
@@ -505,11 +516,14 @@ const Home = () => {
                               <label className="text-gray-400 text-xs">Verdict Phase</label>
                               <input
                                 type="number"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 min="10"
                                 max="300"
                                 value={verdictTime}
                                 onChange={(e) => setVerdictTime(parseInt(e.target.value) || 45)}
-                                className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                                onClick={(e) => e.target.select()}
+                                className="w-20 min-h-[44px] bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500 touch-manipulation"
                               />
                             </div>
                             
@@ -517,11 +531,14 @@ const Home = () => {
                               <label className="text-gray-400 text-xs">Reveal Phase</label>
                               <input
                                 type="number"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
                                 min="5"
                                 max="60"
                                 value={revealTime}
                                 onChange={(e) => setRevealTime(parseInt(e.target.value) || 15)}
-                                className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500"
+                                onClick={(e) => e.target.select()}
+                                className="w-20 min-h-[44px] bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500 touch-manipulation"
                               />
                             </div>
                           </div>
