@@ -10,10 +10,15 @@ const Results = () => {
   const navigate = useNavigate()
   
   const { gameResults, participants, myUserId, mySecret, leaveRoom } = useGameStore()
-  const [traitorDetails, setTraitorDetails] = useState(null) // ✨ NEW: Separate traitor state
+  const [traitorDetails, setTraitorDetails] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  // ✅ FIX: Load traitor details with proper dependencies
   useEffect(() => {
+    console.log('🔍 Results page mounted')
+    console.log('🎮 Game Results:', gameResults)
+    console.log('👥 Participants:', participants)
+    
     // Fire confetti
     setTimeout(() => {
       confetti({
@@ -26,17 +31,29 @@ const Results = () => {
 
     // Load traitor details
     loadTraitorDetails()
-  }, [])
+  }, [gameResults, participants, roomId]) // ✅ FIX: Added dependencies
 
-  // ✨ NEW: Proper traitor fetching with fallback
+  // ✨ Proper traitor fetching with fallback
   const loadTraitorDetails = async () => {
     try {
-      // ✅ BUG FIX #4: Handle both traitorIds (array) and traitorId (singular)
+      console.log('🔎 Loading traitor details...')
+      
+      // ✅ FIX: Check if gameResults exists
+      if (!gameResults) {
+        console.error('❌ gameResults is null/undefined')
+        setLoading(false)
+        return
+      }
+      
+      // Handle both traitorIds (array) and traitorId (singular)
       const traitorIds = gameResults?.traitorIds || []
-      const traitorId = traitorIds[0] || gameResults?.traitorId  // Backwards compatibility
+      const traitorId = traitorIds[0] || gameResults?.traitorId
+      
+      console.log('🔍 traitorIds:', traitorIds)
+      console.log('🔍 traitorId:', traitorId)
       
       if (!traitorId) {
-        console.error('❌ No traitor ID in game results')
+        console.error('❌ No traitor ID in game results', gameResults)
         setLoading(false)
         return
       }
@@ -86,16 +103,21 @@ const Results = () => {
     navigate('/')
   }
 
-  if (loading) {
+  // ✅ FIX: Show loading if gameResults is not ready
+  if (loading || !gameResults) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-        <div className="text-2xl text-purple-400 animate-pulse">Loading results...</div>
+        <div className="text-center">
+          <div className="text-2xl text-purple-400 animate-pulse mb-4">Loading results...</div>
+          {!gameResults && (
+            <p className="text-gray-500 text-sm">Waiting for game data...</p>
+          )}
+        </div>
       </div>
     )
   }
 
   const winner = gameResults?.winner
-  // ✅ BUG FIX #4: Use same logic as loadTraitorDetails for consistency
   const traitorIds = gameResults?.traitorIds || []
   const traitorId = traitorIds[0] || gameResults?.traitorId
   const wasITraitor = myUserId === traitorId
@@ -122,7 +144,7 @@ const Results = () => {
             {winner === 'TRAITOR' ? 'Traitor Wins!' : 'Citizens Win!'}
           </h1>
           
-          {/* NEW: Personalized victory message */}
+          {/* Personalized victory message */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -251,7 +273,7 @@ const Results = () => {
           </div>
         </motion.div>
 
-        {/* NEW: Game Tips Section */}
+        {/* Game Tips Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
