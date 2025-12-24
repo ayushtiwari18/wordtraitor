@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
+import ConnectionIndicator from '../../components/ConnectionIndicator'
 import { gameHelpers } from '../../lib/supabase'
 import { Copy, Check, Users, Settings, ChevronDown, ChevronUp, Clock } from 'lucide-react'
 
@@ -23,6 +24,7 @@ const Lobby = () => {
     isLoading,
     error,
     isConnected,
+    subscriptionState,
     customTimings,
     traitorCount
   } = useGameStore()
@@ -33,16 +35,12 @@ const Lobby = () => {
   const [isLoadingRoom, setIsLoadingRoom] = useState(true)
   const [isLeaving, setIsLeaving] = useState(false)
   
-  // 🔧 FIX #6: Track polling state
   const pollIntervalRef = useRef(null)
   const fallbackTimerRef = useRef(null)
 
-  // Load room data ONCE on mount
   useEffect(() => {
     console.log('🎯 Lobby mounted with roomId:', roomIdOrCode)
     
-    // CRITICAL FIX: Check if room is already loaded by room_code (not id)
-    // roomIdOrCode from URL is the 6-char room code, not UUID
     const hasParticipants = participants && participants.length > 0
     const isAlreadyLoadedByCode = room && room.room_code === roomIdOrCode && hasParticipants
     const isAlreadyLoadedById = room && room.id === roomIdOrCode && hasParticipants
@@ -62,25 +60,19 @@ const Lobby = () => {
       .catch(err => {
         console.error('❌ Load error:', err)
         setIsLoadingRoom(false)
-        // Don't clear room if first load succeeded and only second failed
-        // This prevents UI from breaking on React StrictMode double-mount
       })
-  }, [roomIdOrCode]) // Only depend on roomIdOrCode
+  }, [roomIdOrCode])
 
-  // 🔧 FIX #6: Hybrid approach - Realtime + Fallback Polling
   useEffect(() => {
-    // Only poll if we're in lobby and not the host
     if (room?.status !== 'LOBBY' || isHost) {
       return
     }
     
     console.log('⏰ Starting fallback timer (3s grace period)...')
     
-    // Wait 3 seconds for realtime to work
     fallbackTimerRef.current = setTimeout(() => {
       console.log('⏰ Fallback timer expired, starting polling...')
       
-      // Start polling every 1 second
       pollIntervalRef.current = setInterval(async () => {
         try {
           console.log('🔍 Polling for game start...')
@@ -89,23 +81,19 @@ const Lobby = () => {
           if (updatedRoom.status === 'PLAYING') {
             console.log('✅ Game started (detected via polling)!')
             
-            // Clear polling
             if (pollIntervalRef.current) {
               clearInterval(pollIntervalRef.current)
               pollIntervalRef.current = null
             }
             
-            // Navigate to game
             navigate(`/game/${roomIdOrCode}`)
           }
         } catch (error) {
           console.error('❌ Polling error:', error)
-          // Don't stop polling on error - might be transient
         }
       }, 1000)
     }, 3000)
     
-    // Cleanup function
     return () => {
       if (fallbackTimerRef.current) {
         clearTimeout(fallbackTimerRef.current)
@@ -119,12 +107,10 @@ const Lobby = () => {
     }
   }, [room?.status, isHost, roomIdOrCode, navigate])
 
-  // Navigate when game starts (via realtime - this handles 95% of cases)
   useEffect(() => {
     if (room?.status === 'PLAYING') {
       console.log('🎮 Navigating to game (via realtime)')
       
-      // Clear polling if it was running
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current)
         pollIntervalRef.current = null
@@ -164,9 +150,8 @@ const Lobby = () => {
   }
 
   const handleLeave = async () => {
-    if (isLeaving) return // Prevent double-click
+    if (isLeaving) return
     
-    // Clear polling on leave
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current)
       pollIntervalRef.current = null
@@ -177,7 +162,7 @@ const Lobby = () => {
     }
     
     setIsLeaving(true)
-    console.log('🚪 Leave button clicked, starting leave process...')
+    console.log('🚺 Leave button clicked, starting leave process...')
     
     try {
       await leaveRoom()
@@ -186,7 +171,6 @@ const Lobby = () => {
       console.log('✅ Navigation complete')
     } catch (error) {
       console.error('❌ Error leaving room:', error)
-      // Still navigate even on error
       navigate('/', { replace: true })
     } finally {
       setIsLeaving(false)
@@ -195,7 +179,6 @@ const Lobby = () => {
 
   const hasCustomSettings = customTimings !== null || traitorCount > 1
 
-  // Loading state (but still show room if we have it)
   if (isLoadingRoom && !room) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -207,7 +190,6 @@ const Lobby = () => {
     )
   }
 
-  // Error state (ONLY if we don't have room data)
   if (error && !room) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -222,7 +204,6 @@ const Lobby = () => {
     )
   }
 
-  // Room not found
   if (!room && !isLoadingRoom) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
@@ -243,9 +224,13 @@ const Lobby = () => {
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">🎮 Game Lobby</h1>
           <p className="text-gray-400">Waiting for players...</p>
-          <div className="mt-4 flex items-center justify-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
-            <span className="text-sm text-gray-400">{isConnected ? 'Connected' : 'Connecting...'}</span>
+          {/* ✅ NEW: Connection Status Indicator with full label */}
+          <div className="mt-4 flex items-center justify-center">
+            <ConnectionIndicator 
+              isConnected={isConnected} 
+              subscriptionState={subscriptionState}
+              showLabel={true}
+            />
           </div>
         </motion.div>
 
@@ -413,7 +398,7 @@ const Lobby = () => {
             onClick={handleLeave} 
             disabled={isLeaving}
             className="px-6 py-4 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:cursor-wait rounded-xl font-bold text-white transition-colors">
-            {isLeaving ? '...' : '🚪 Leave'}
+            {isLeaving ? '...' : '🚺 Leave'}
           </button>
         </motion.div>
 
