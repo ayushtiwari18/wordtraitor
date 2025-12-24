@@ -179,23 +179,30 @@ const HintDropPhase = () => {
     [currentUserId, myUserId]
   )
 
+  // NEW: Timer urgency color
+  const timerColor = useMemo(() => {
+    if (phaseTimer > 30) return 'text-purple-400'
+    if (phaseTimer > 10) return 'text-yellow-400 animate-pulse'
+    return 'text-red-400 animate-pulse'
+  }, [phaseTimer])
+
   return (
     <div className="max-w-4xl mx-auto p-6" data-testid="hint-drop-phase-container">
-      {/* Header */}
+      {/* Header - ENHANCED */}
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-white mb-2">
           {isRealMode ? '🎤 Speak Your Hint' : '💡 Drop Your Hint'}
         </h2>
         <p className="text-gray-400">
           {isSilentMode 
-            ? 'Give a one-word hint about your secret word' 
+            ? 'One word. One chance. Make it count. 🎯' 
             : 'Speak your hint out loud when the wheel selects you'
           }
         </p>
         <div className="mt-4 flex items-center justify-center gap-2">
           {isSilentMode && (
             <>
-              <div data-testid="phase-timer" className="text-2xl font-bold text-purple-400">{phaseTimer}s</div>
+              <div data-testid="phase-timer" className={`text-2xl font-bold ${timerColor}`}>{phaseTimer}s</div>
               <div className="text-gray-400">|</div>
             </>
           )}
@@ -232,7 +239,7 @@ const HintDropPhase = () => {
               <p className="text-lg text-gray-300 mb-4">
                 {currentSpeaker.user_id === myUserId 
                   ? '🎤 It\'s YOUR turn! Speak your hint to everyone'
-                  : `🎧 Listen to ${currentSpeaker.username}\'s hint`
+                  : `👂 Listen to ${currentSpeaker.username}\'s hint`
                 }
               </p>
 
@@ -291,7 +298,7 @@ const HintDropPhase = () => {
         </motion.div>
       )}
 
-      {/* SILENT MODE: Hint Input */}
+      {/* SILENT MODE: Hint Input - ENHANCED */}
       {isSilentMode && !hasSubmitted && isMyTurn && (
         <motion.form
           initial={{ opacity: 0, y: 20 }}
@@ -299,21 +306,21 @@ const HintDropPhase = () => {
           onSubmit={handleSubmit}
           className="mb-8"
         >
-          <div className="bg-gray-800 border-2 border-purple-500 rounded-xl p-6">
+          <div className="bg-gray-800 border-2 border-purple-500 rounded-xl p-6 glow-purple-sm">
             <input
               type="text"
               value={hintText}
               onChange={(e) => setHintText(e.target.value)}
-              placeholder="Type your one-word hint..."
+              placeholder="Choose wisely. Every word counts. 🎯"
               maxLength={30}
               data-testid="hint-input"
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-purple-500 transition-colors"
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-purple-500 transition-colors placeholder:text-gray-600"
               disabled={isSubmitting}
               autoFocus
             />
             <div className="mt-4 flex items-center justify-between">
               <p className="text-sm text-gray-400">
-                Be specific but not too obvious!
+                Be vague enough to hide. Specific enough to fit in.
               </p>
               <button
                 type="submit"
@@ -321,14 +328,14 @@ const HintDropPhase = () => {
                 disabled={!hintText.trim() || isSubmitting}
                 className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-colors"
               >
-                {isSubmitting ? 'Submitting...' : 'Submit Hint'}
+                {isSubmitting ? 'Dropping...' : '📤 Drop Hint'}
               </button>
             </div>
           </div>
         </motion.form>
       )}
 
-      {/* SILENT MODE: Waiting Message */}
+      {/* SILENT MODE: Waiting Message - ENHANCED */}
       {isSilentMode && !isMyTurn && !hasSubmitted && (
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
@@ -341,6 +348,7 @@ const HintDropPhase = () => {
           <p className="text-sm text-gray-500 mt-2">
             {currentPlayer ? `${currentPlayer.username} is giving their hint` : 'Waiting...'}
           </p>
+          <p className="text-xs text-gray-600 mt-2">Analyzing their hints... 🔍</p>
         </motion.div>
       )}
 
@@ -383,7 +391,7 @@ const HintDropPhase = () => {
         />
       )}
 
-      {/* SILENT MODE: Instructions */}
+      {/* SILENT MODE: Instructions - ENHANCED */}
       {isSilentMode && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -391,11 +399,12 @@ const HintDropPhase = () => {
           transition={{ delay: 0.5 }}
           className="mt-8 bg-blue-500/10 border border-blue-500 rounded-xl p-4"
         >
-          <h3 className="text-blue-400 font-semibold mb-2">💡 Tips</h3>
+          <h3 className="text-blue-400 font-semibold mb-2">💡 Strategy Tips</h3>
           <ul className="text-sm text-gray-300 space-y-1">
-            <li>• Wait for your turn to submit your hint</li>
-            <li>• Make your hint related to your word but not too obvious</li>
-            <li>• Keep it to one word or a short phrase</li>
+            <li>• <strong>Citizens:</strong> Give hints that confirm you have the real word</li>
+            <li>• <strong>Traitors:</strong> Give hints vague enough to blend in</li>
+            <li>• Avoid saying your exact word or giving it away</li>
+            <li>• Watch others' hints closely - who seems suspicious?</li>
           </ul>
         </motion.div>
       )}
