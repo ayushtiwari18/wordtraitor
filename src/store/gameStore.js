@@ -551,6 +551,7 @@ const useGameStore = create((set, get) => ({
         
         if (get().canAdvancePhaseEarly()) {
           clearInterval(interval)
+          set({ phaseInterval: null }) // ✅ BUG FIX #6: Clear interval reference
           console.log(`⚡ ${phaseName} complete early! All players submitted.`)
           
           const { isHost } = get()
@@ -569,6 +570,7 @@ const useGameStore = create((set, get) => ({
         
         if (timeLeft <= 0) {
           clearInterval(interval)
+          set({ phaseInterval: null }) // ✅ BUG FIX #6: Clear interval reference
           console.log(`⏰ ${phaseName} phase ended`)
           
           const { isHost } = get()
@@ -641,6 +643,7 @@ const useGameStore = create((set, get) => ({
       
       if (get().canAdvancePhaseEarly()) {
         clearInterval(interval)
+        set({ phaseInterval: null }) // ✅ BUG FIX #6: Clear interval reference
         console.log(`⚡ ${phaseName} complete early! All players submitted.`)
         
         const { isHost } = get()
@@ -659,6 +662,7 @@ const useGameStore = create((set, get) => ({
       
       if (timeLeft <= 0) {
         clearInterval(interval)
+        set({ phaseInterval: null }) // ✅ BUG FIX #6: Clear interval reference
         console.log(`⏰ ${phaseName} phase ended`)
         
         const { isHost } = get()
@@ -669,15 +673,25 @@ const useGameStore = create((set, get) => ({
               await get().advancePhase()
             } catch (error) {
               console.error('❌ Error auto-advancing phase:', error)
-            }
-          })()
-        } else {
-          console.log('⏳ Waiting for host to advance phase...')
+            })()
+          } else {
+            console.log('⏳ Waiting for host to advance phase...')
+          }
         }
       }
     }, 1000)
     
     set({ phaseInterval: interval })
+  },
+
+  // ✅ BUG FIX #6: Expose stopPhaseTimer for REAL mode early completion
+  stopPhaseTimer: () => {
+    const { phaseInterval } = get()
+    if (phaseInterval) {
+      clearInterval(phaseInterval)
+      set({ phaseInterval: null, phaseTimer: 0 })
+      console.log('⏸️ Phase timer stopped manually')
+    }
   },
 
   advancePhase: async () => {
@@ -705,6 +719,7 @@ const useGameStore = create((set, get) => ({
     const { phaseInterval } = get()
     if (phaseInterval) {
       clearInterval(phaseInterval)
+      set({ phaseInterval: null })
     }
     await get().advancePhase()
   },
@@ -958,7 +973,10 @@ const useGameStore = create((set, get) => ({
         set({ showResults: true, gameResults: finalResults })
         
         const { phaseInterval } = get()
-        if (phaseInterval) clearInterval(phaseInterval)
+        if (phaseInterval) {
+          clearInterval(phaseInterval)
+          set({ phaseInterval: null })
+        }
         
         get().stopHeartbeat() // ✅ Stop heartbeat when game ends
         return
@@ -1071,16 +1089,15 @@ const useGameStore = create((set, get) => ({
       },
       
       onParticipantUpdate: async (payload) => {
-        // ✅ BUG FIX #5: Enhanced heartbeat filter with debouncing
+        // ✅ BUG FIX #6: Fixed heartbeat filter - removed 'role' check (doesn't exist in room_participants!)
         if (payload.eventType === 'UPDATE') {
           const oldData = payload.old || {}
           const newData = payload.new || {}
           
-          // Check if ONLY last_seen changed (heartbeat update)
+          // Check ONLY fields that exist and matter in room_participants table
           const meaningfulFieldsChanged = 
             oldData.is_alive !== newData.is_alive ||
             oldData.username !== newData.username ||
-            oldData.role !== newData.role ||
             oldData.user_id !== newData.user_id
           
           if (!meaningfulFieldsChanged) {
@@ -1093,7 +1110,7 @@ const useGameStore = create((set, get) => ({
           console.log('👥 Participants updated (INSERT/DELETE)')
         }
         
-        // ✅ BUG FIX #5: Debounce participant updates (200ms)
+        // ✅ BUG FIX #6: Increased debounce to 500ms for better batching
         const { participantUpdateTimeout } = get()
         if (participantUpdateTimeout) {
           clearTimeout(participantUpdateTimeout)
@@ -1104,7 +1121,7 @@ const useGameStore = create((set, get) => ({
           if (!roomId) return
           const participants = await gameHelpers.getParticipants(roomId)
           set({ participants })
-        }, 200)
+        }, 500) // ✅ BUG FIX #6: Increased from 200ms to 500ms
         
         set({ participantUpdateTimeout: timeout })
       },
