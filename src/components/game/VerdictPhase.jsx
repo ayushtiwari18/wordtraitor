@@ -19,6 +19,7 @@ const VerdictPhase = () => {
   const [hasVoted, setHasVoted] = useState(false)
   const [isAdvancing, setIsAdvancing] = useState(false) // ✨ NEW: Track if we're auto-advancing
   const [showAllVotedMessage, setShowAllVotedMessage] = useState(false) // ✨ NEW
+  const [countdown, setCountdown] = useState(2) // ✅ BUG FIX #3: Countdown for UX feedback
 
   const alivePlayers = getAliveParticipants().filter(p => p.user_id !== myUserId)
   const myPlayer = getAliveParticipants().find(p => p.user_id === myUserId)
@@ -48,6 +49,23 @@ const VerdictPhase = () => {
       }, 2000)
     }
   }, [votes.length, totalAlivePlayers, isAdvancing])
+
+  // ✅ BUG FIX #3: Countdown timer for visual feedback during auto-advance
+  useEffect(() => {
+    if (!showAllVotedMessage) return
+    
+    const interval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 0) {
+          clearInterval(interval)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [showAllVotedMessage])
 
   const handleVote = async () => {
     if (!selectedPlayer || isSubmitting || hasVoted) return
@@ -94,7 +112,7 @@ const VerdictPhase = () => {
               className="mt-6 p-4 bg-green-500/20 border-2 border-green-500 rounded-xl"
             >
               <p className="text-green-400 font-bold text-lg">✅ All votes in!</p>
-              <p className="text-gray-300 text-sm mt-1">Revealing results...</p>
+              <p className="text-gray-300 text-sm mt-1">Revealing results in {countdown}s...</p>
             </motion.div>
           )}
         </motion.div>
@@ -117,7 +135,7 @@ const VerdictPhase = () => {
         </div>
       </div>
 
-      {/* ✨ NEW: All Votes In Message */}
+      {/* ✨ NEW: All Votes In Message with Countdown */}
       {showAllVotedMessage && (
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
@@ -126,7 +144,8 @@ const VerdictPhase = () => {
         >
           <div className="text-4xl mb-2">✅</div>
           <p className="text-green-400 font-bold text-xl">All votes in!</p>
-          <p className="text-gray-300 mt-2">Revealing results...</p>
+          {/* ✅ BUG FIX #3: Show countdown so users know it's intentional delay */}
+          <p className="text-gray-300 mt-2">Revealing results in {countdown}s...</p>
         </motion.div>
       )}
 

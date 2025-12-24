@@ -104,8 +104,16 @@ const HintDropPhase = () => {
     const alivePlayers = getAliveParticipants()
     if (completedPlayerIds.length + 1 >= alivePlayers.length) {
       console.log('🎉 All players completed! Host will advance to VERDICT')
+      
+      // ✅ BUG FIX #2: Actually call advancePhase when all players complete
+      if (isHost) {
+        setTimeout(() => {
+          const { advancePhase } = useGameStore.getState()
+          advancePhase()
+        }, 1000)  // 1s delay for visual feedback
+      }
     }
-  }, [currentSpeaker, completedPlayerIds.length, getAliveParticipants])
+  }, [currentSpeaker, completedPlayerIds.length, getAliveParticipants, isHost])
 
   // 🔧 CYCLE 4 FIX: useMemo for expensive derived state
   const alivePlayers = useMemo(() => {
