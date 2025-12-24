@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
-import { Play, Users, Sparkles, Settings, ChevronDown, ChevronUp, User } from 'lucide-react'
+import { Play, Users, Sparkles, Settings, ChevronDown, ChevronUp, User, Crown, Activity } from 'lucide-react'
 
 const Home = () => {
   const navigate = useNavigate()
@@ -16,6 +16,7 @@ const Home = () => {
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState('')
   const [localUsername, setLocalUsername] = useState(guestUsername || '')
+  const [logoError, setLogoError] = useState(false)
 
   // Basic settings
   const [gameMode, setGameMode] = useState('SILENT')
@@ -161,145 +162,211 @@ const Home = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center px-4">
-      <div className="max-w-4xl w-full">
-        {/* Hero Section - ENHANCED MICROCOPY */}
-        <motion.div
-          initial={{ opacity: 0, y: -50 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
-        >
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex flex-col relative overflow-hidden">
+      {/* Animated background particles */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {[...Array(20)].map((_, i) => (
           <motion.div
-            animate={{ 
-              scale: [1, 1.1, 1],
-              rotate: [0, 5, -5, 0]
+            key={i}
+            className="absolute w-2 h-2 bg-purple-500/20 rounded-full"
+            initial={{ 
+              x: Math.random() * window.innerWidth,
+              y: Math.random() * window.innerHeight,
+              scale: Math.random() * 0.5 + 0.5
             }}
-            transition={{ 
-              duration: 3,
+            animate={{
+              y: [null, Math.random() * window.innerHeight],
+              x: [null, Math.random() * window.innerWidth],
+            }}
+            transition={{
+              duration: Math.random() * 10 + 20,
               repeat: Infinity,
-              repeatDelay: 2
+              repeatType: 'reverse'
             }}
-            className="text-8xl mb-6"
-          >
-            🕵️
-          </motion.div>
-          <h1 className="text-6xl font-bold text-white mb-4">
-            Word<span className="text-red-500 text-glow-purple">Traitor</span>
-          </h1>
-          
-          {/* NEW: Pulsing gradient headline */}
-          <motion.p 
-            className="text-2xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 mb-2 font-bold"
-            animate={{ opacity: [0.7, 1, 0.7] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          >
-            🕵️ Someone knows the word. Someone will betray you.
-          </motion.p>
-          
-          {/* NEW: Secondary tagline */}
-          <p className="text-gray-400 text-lg">
-            Trust no one. Guess the word. Expose the traitor.
-          </p>
-        </motion.div>
-
-        {/* Username Input - ENHANCED */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-8"
-        >
-          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <User className="w-5 h-5 text-purple-400" />
-              <label className="text-white font-semibold">Who are you?</label>
-              <span className="text-gray-500 text-sm">(They'll remember...)</span>
-            </div>
-            <input
-              type="text"
-              value={localUsername}
-              onChange={(e) => handleUsernameChange(e.target.value)}
-              placeholder="Choose wisely. This name stays. 👀"
-              maxLength={20}
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
-              data-testid="username-input"
-            />
-            <p className="text-gray-500 text-xs mt-2">
-              2-20 characters. Make it memorable.
-            </p>
-          </div>
-        </motion.div>
-
-        {/* Main Actions - ENHANCED BUTTON COPY */}
-        <div className="grid md:grid-cols-2 gap-6 mb-12">
-          <motion.button
-            data-testid="create-room-button"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            onClick={() => setShowCreateModal(true)}
-            disabled={!localUsername.trim()}
-            className="group relative bg-gradient-to-br from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl disabled:hover:scale-100 glow-purple-sm"
-          >
-            <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-            <Sparkles className="w-12 h-12 mx-auto mb-4" />
-            {/* NEW COPY */}
-            <h3 className="text-2xl font-bold text-white mb-2">Create Chaos</h3>
-            <p className="text-purple-100">Start the mind game with friends</p>
-          </motion.button>
-
-          <motion.button
-            data-testid="join-room-button"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.3 }}
-            onClick={() => setShowJoinModal(true)}
-            disabled={!localUsername.trim()}
-            className="group relative bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl disabled:hover:scale-100 glow-cyan-sm"
-          >
-            <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-            <Users className="w-12 h-12 mx-auto mb-4" />
-            {/* NEW COPY */}
-            <h3 className="text-2xl font-bold text-white mb-2">Join the Suspicion</h3>
-            <p className="text-blue-100">Enter code. Trust nobody.</p>
-          </motion.button>
-        </div>
-
-        {/* How to Play */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-8"
-        >
-          <h3 className="text-2xl font-bold text-white mb-6 text-center">🎯 How to Play</h3>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="text-4xl mb-3">📝</div>
-              <h4 className="text-white font-semibold mb-2">1. Get Your Word</h4>
-              <p className="text-gray-400 text-sm">
-                Each citizen gets the same word, but the traitor gets a different one
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl mb-3">💬</div>
-              <h4 className="text-white font-semibold mb-2">2. Give Hints</h4>
-              <p className="text-gray-400 text-sm">
-                Submit hints about your word without revealing it directly
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl mb-3">⚖️</div>
-              <h4 className="text-white font-semibold mb-2">3. Find the Traitor</h4>
-              <p className="text-gray-400 text-sm">
-                Vote to eliminate the player you think is the traitor
-              </p>
-            </div>
-          </div>
-        </motion.div>
+          />
+        ))}
       </div>
 
-      {/* Join Room Modal */}
+      {/* Header with Logo */}
+      <header className="relative z-10 p-6 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          {/* Logo - supports image or emoji fallback */}
+          {!logoError ? (
+            <img 
+              src="/logo.png" 
+              alt="WordTraitor Logo"
+              className="h-12 w-12 object-contain"
+              onError={() => setLogoError(true)}
+            />
+          ) : (
+            <div className="text-5xl">🕵️</div>
+          )}
+          <div>
+            <h1 className="text-2xl font-bold text-white">WordTraitor</h1>
+            <p className="text-xs text-gray-400">v1.0.0</p>
+          </div>
+        </div>
+        
+        {/* Stats */}
+        <div className="hidden md:flex items-center gap-6 text-sm">
+          <div className="flex items-center gap-2 px-4 py-2 bg-gray-800/50 rounded-lg border border-gray-700">
+            <Activity className="w-4 h-4 text-green-400" />
+            <span className="text-gray-300">Online</span>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="flex-1 flex items-center justify-center px-4 relative z-10">
+        <div className="max-w-4xl w-full">
+          {/* Hero Section - ENHANCED */}
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mb-12"
+          >
+            <motion.div
+              animate={{ 
+                scale: [1, 1.1, 1],
+                rotate: [0, 5, -5, 0]
+              }}
+              transition={{ 
+                duration: 3,
+                repeat: Infinity,
+                repeatDelay: 2
+              }}
+              className="text-8xl mb-6"
+            >
+              🕵️
+            </motion.div>
+            <h1 className="text-6xl font-bold text-white mb-4">
+              Word<span className="text-red-500 text-glow-purple">Traitor</span>
+            </h1>
+            
+            {/* Pulsing gradient headline */}
+            <motion.p 
+              className="text-2xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 mb-2 font-bold"
+              animate={{ opacity: [0.7, 1, 0.7] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              🕵️ Someone knows the word. Someone will betray you.
+            </motion.p>
+            
+            {/* Secondary tagline */}
+            <p className="text-gray-400 text-lg">
+              Trust no one. Guess the word. Expose the traitor.
+            </p>
+          </motion.div>
+
+          {/* Username Input - ENHANCED with character counter */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="mb-8"
+          >
+            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <User className="w-5 h-5 text-purple-400" />
+                <label className="text-white font-semibold">Who are you?</label>
+                <span className="text-gray-500 text-sm">(They'll remember...)</span>
+              </div>
+              <input
+                type="text"
+                value={localUsername}
+                onChange={(e) => handleUsernameChange(e.target.value)}
+                placeholder="Choose wisely. This name stays. 👀"
+                maxLength={20}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
+                data-testid="username-input"
+              />
+              <div className="flex justify-between items-center mt-2">
+                <p className="text-gray-500 text-xs">2-20 characters. Make it memorable.</p>
+                <p className={`text-xs ${
+                  localUsername.length < 2 ? 'text-red-400' :
+                  localUsername.length > 15 ? 'text-yellow-400' : 'text-green-400'
+                }`}>
+                  {localUsername.length}/20
+                </p>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Main Actions - ENHANCED */}
+          <div className="grid md:grid-cols-2 gap-6 mb-12">
+            <motion.button
+              data-testid="create-room-button"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2 }}
+              onClick={() => setShowCreateModal(true)}
+              disabled={!localUsername.trim()}
+              className="group relative bg-gradient-to-br from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl disabled:hover:scale-100 glow-purple-sm"
+            >
+              <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Sparkles className="w-12 h-12 mx-auto mb-4" />
+              <h3 className="text-2xl font-bold text-white mb-2">🎭 Create Chaos</h3>
+              <p className="text-purple-100">Start the mind game with friends</p>
+            </motion.button>
+
+            <motion.button
+              data-testid="join-room-button"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+              onClick={() => setShowJoinModal(true)}
+              disabled={!localUsername.trim()}
+              className="group relative bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl disabled:hover:scale-100 glow-cyan-sm"
+            >
+              <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Users className="w-12 h-12 mx-auto mb-4" />
+              <h3 className="text-2xl font-bold text-white mb-2">🔍 Join the Suspicion</h3>
+              <p className="text-blue-100">Enter code. Trust nobody.</p>
+            </motion.button>
+          </div>
+
+          {/* How to Play */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-8"
+          >
+            <h3 className="text-2xl font-bold text-white mb-6 text-center">🎯 How to Play</h3>
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="text-center">
+                <div className="text-4xl mb-3">📝</div>
+                <h4 className="text-white font-semibold mb-2">1. Get Your Word</h4>
+                <p className="text-gray-400 text-sm">
+                  Each citizen gets the same word, but the traitor gets a different one
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl mb-3">💬</div>
+                <h4 className="text-white font-semibold mb-2">2. Give Hints</h4>
+                <p className="text-gray-400 text-sm">
+                  Submit hints about your word without revealing it directly
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl mb-3">⚖️</div>
+                <h4 className="text-white font-semibold mb-2">3. Find the Traitor</h4>
+                <p className="text-gray-400 text-sm">
+                  Vote to eliminate the player you think is the traitor
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="relative z-10 p-6 text-center text-gray-500 text-sm border-t border-gray-800">
+        <p>🎮 Built with deception in mind | © 2024 WordTraitor</p>
+        <p className="mt-1 text-xs">A social deduction game for 4-12 players</p>
+      </footer>
+
+      {/* Join Room Modal - Same as before */}
       <AnimatePresence mode="wait">
         {showJoinModal && (
           <motion.div 
@@ -368,7 +435,7 @@ const Home = () => {
         )}
       </AnimatePresence>
 
-      {/* Create Room Modal */}
+      {/* Create Room Modal - Keep existing implementation */}
       <AnimatePresence mode="wait">
         {showCreateModal && (
           <motion.div 
@@ -533,7 +600,7 @@ const Home = () => {
                                 max="300"
                                 value={verdictTime}
                                 onChange={(e) => setVerdictTime(parseInt(e.target.value) || 45)}
-                                onClick={(e) => e.target.select()}
+                                onClick=(e) => e.target.select()}
                                 className="w-20 min-h-[44px] bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500 touch-manipulation"
                               />
                             </div>
