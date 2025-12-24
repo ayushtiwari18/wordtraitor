@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
 import ConnectionIndicator from '../../components/ConnectionIndicator'
+import PlayerJoinToast from '../../components/PlayerJoinToast'
 import { gameHelpers } from '../../lib/supabase'
 import { Copy, Check, Users, Settings, ChevronDown, ChevronUp, Clock } from 'lucide-react'
 
@@ -35,8 +36,45 @@ const Lobby = () => {
   const [isLoadingRoom, setIsLoadingRoom] = useState(true)
   const [isLeaving, setIsLeaving] = useState(false)
   
+  // NEW: Rotating lobby messages
+  const [messageIndex, setMessageIndex] = useState(0)
+  const lobbyMessages = [
+    "👀 Waiting for suspects...",
+    "🤝 Trust is forming... or is it?",
+    "🔐 Room sealed. No turning back.",
+    "🧑‍🤝‍🧑 The table is filling up...",
+    "⏳ Someone will betray you soon.",
+    "😈 Roles will be assigned. Secrets will be kept.",
+    "🎭 Who can you trust? Nobody.",
+  ]
+  
+  // NEW: Player join toast state
+  const [showJoinToast, setShowJoinToast] = useState(false)
+  const [joinedPlayer, setJoinedPlayer] = useState(null)
+  const previousParticipantCount = useRef(0)
+  
   const pollIntervalRef = useRef(null)
   const fallbackTimerRef = useRef(null)
+
+  // NEW: Rotate lobby messages every 3 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMessageIndex((prev) => (prev + 1) % lobbyMessages.length)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // NEW: Detect player joins and show toast
+  useEffect(() => {
+    if (participants.length > previousParticipantCount.current && previousParticipantCount.current > 0) {
+      const newPlayer = participants[participants.length - 1]
+      if (newPlayer && newPlayer.user_id !== myUserId) { // Don't show toast for yourself
+        setJoinedPlayer(newPlayer)
+        setShowJoinToast(true)
+      }
+    }
+    previousParticipantCount.current = participants.length
+  }, [participants.length, myUserId])
 
   useEffect(() => {
     console.log('🎯 Lobby mounted with roomId:', roomIdOrCode)
@@ -221,10 +259,33 @@ const Lobby = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 py-12 px-4">
       <div className="max-w-4xl mx-auto">
+        {/* NEW: Player Join Toast */}
+        <AnimatePresence>
+          {showJoinToast && joinedPlayer && (
+            <PlayerJoinToast 
+              username={joinedPlayer.username || 'Player'}
+              onClose={() => setShowJoinToast(false)}
+            />
+          )}
+        </AnimatePresence>
+
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">🎮 Game Lobby</h1>
-          <p className="text-gray-400">Waiting for players...</p>
-          {/* ✅ NEW: Connection Status Indicator with full label */}
+          
+          {/* NEW: Rotating suspicion messages */}
+          <AnimatePresence mode="wait">
+            <motion.p 
+              key={messageIndex}
+              className="text-gray-400 italic mb-4"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ duration: 0.5 }}
+            >
+              {lobbyMessages[messageIndex]}
+            </motion.p>
+          </AnimatePresence>
+          
           <div className="mt-4 flex items-center justify-center">
             <ConnectionIndicator 
               isConnected={isConnected} 
@@ -380,25 +441,53 @@ const Lobby = () => {
           )}
         </motion.div>
 
-        {/* Action Buttons */}
+        {/* Action Buttons - ENHANCED */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="flex gap-4">
           {isHost ? (
             <button 
               data-testid="start-game-button"
               onClick={handleStartGame} 
               disabled={participants.length < 2 || isStarting} 
-              className="flex-1 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-xl font-bold text-white text-lg transition-colors shadow-lg">
-              {isStarting ? 'Starting...' : '🚀 Start Game'}
+              className="flex-1 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-xl font-bold text-white text-lg transition-colors shadow-lg animate-pulse-glow"
+            >
+              {isStarting ? (
+                <>
+                  <span className="block text-xl">🎭 Assigning roles...</span>
+                  <span className="block text-sm mt-1 opacity-80">Secrets being distributed...</span>
+                </>
+              ) : participants.length >= 2 ? (
+                <>
+                  <span className="block text-xl">😈 Begin the Betrayal</span>
+                  <span className="block text-sm mt-1 opacity-80">Let the lies begin...</span>
+                </>
+              ) : (
+                <>
+                  <span className="block text-xl">⏳ Waiting for Suspects</span>
+                  <span className="block text-sm mt-1 opacity-80">({2 - participants.length} more needed)</span>
+                </>
+              )}
             </button>
           ) : (
-            <div className="flex-1 py-4 bg-gray-700 rounded-xl font-bold text-gray-400 text-lg text-center">⏳ Waiting for host...</div>
+            <div className="flex-1 py-4 bg-gray-700 rounded-xl font-bold text-gray-400 text-lg text-center">
+              <span className="block text-xl">⏳ Host will start soon...</span>
+              <span className="block text-sm mt-1 opacity-70">Prepare yourself... 🎭</span>
+            </div>
           )}
+          
+          {/* NEW: Enhanced leave button with tooltip */}
           <button 
             data-testid="leave-room-button"
             onClick={handleLeave} 
             disabled={isLeaving}
-            className="px-6 py-4 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:cursor-wait rounded-xl font-bold text-white transition-colors">
-            {isLeaving ? '...' : '🚺 Leave'}
+            className="group relative px-6 py-4 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:cursor-wait rounded-xl font-bold text-white transition-colors"
+            title="Leave before it's too late..."
+          >
+            {isLeaving ? '...' : '🚪 Escape'}
+            {!isLeaving && (
+              <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-gray-900 text-xs text-gray-300 px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                Before it's too late...
+              </span>
+            )}
           </button>
         </motion.div>
 
