@@ -9,16 +9,20 @@ const VerdictPhase = () => {
     votes, 
     submitVote, 
     phaseTimer,
-    gamePhase, // 🔧 FIX: Get gamePhase to check if we should show votes
-    getAliveParticipants 
+    gamePhase,
+    getAliveParticipants,
+    advancePhase // ✨ NEW: For auto-advance
   } = useGameStore()
   
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [hasVoted, setHasVoted] = useState(false)
+  const [isAdvancing, setIsAdvancing] = useState(false) // ✨ NEW: Track if we're auto-advancing
+  const [showAllVotedMessage, setShowAllVotedMessage] = useState(false) // ✨ NEW
 
   const alivePlayers = getAliveParticipants().filter(p => p.user_id !== myUserId)
   const myPlayer = getAliveParticipants().find(p => p.user_id === myUserId)
+  const totalAlivePlayers = getAliveParticipants().length
 
   useEffect(() => {
     const myVote = votes.find(v => v.voter_id === myUserId)
@@ -27,6 +31,23 @@ const VerdictPhase = () => {
       setSelectedPlayer(myVote.target_id)
     }
   }, [votes, myUserId])
+
+  // ✨ NEW: Auto-advance when all votes submitted
+  useEffect(() => {
+    const allVoted = votes.length >= totalAlivePlayers
+    
+    if (allVoted && !isAdvancing && totalAlivePlayers > 0) {
+      console.log('✅ All players voted! Auto-advancing to results...')
+      setShowAllVotedMessage(true)
+      setIsAdvancing(true)
+      
+      // Small delay for UX (show "All votes in!" message)
+      setTimeout(() => {
+        console.log('🚀 Advancing to REVEAL phase')
+        advancePhase()
+      }, 2000)
+    }
+  }, [votes.length, totalAlivePlayers, isAdvancing])
 
   const handleVote = async () => {
     if (!selectedPlayer || isSubmitting || hasVoted) return
@@ -64,6 +85,18 @@ const VerdictPhase = () => {
           <h2 className="text-2xl font-bold text-gray-400 mb-2">You've Been Eliminated</h2>
           <p className="text-gray-500">Watch as the remaining players vote</p>
           <div data-testid="phase-timer" className="mt-6 text-4xl font-bold text-purple-400">{phaseTimer}s</div>
+          
+          {/* Show all-voted message even for eliminated players */}
+          {showAllVotedMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 p-4 bg-green-500/20 border-2 border-green-500 rounded-xl"
+            >
+              <p className="text-green-400 font-bold text-lg">✅ All votes in!</p>
+              <p className="text-gray-300 text-sm mt-1">Revealing results...</p>
+            </motion.div>
+          )}
         </motion.div>
       </div>
     )
@@ -84,8 +117,21 @@ const VerdictPhase = () => {
         </div>
       </div>
 
+      {/* ✨ NEW: All Votes In Message */}
+      {showAllVotedMessage && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="mb-8 bg-green-500/20 border-2 border-green-500 rounded-xl p-6 text-center"
+        >
+          <div className="text-4xl mb-2">✅</div>
+          <p className="text-green-400 font-bold text-xl">All votes in!</p>
+          <p className="text-gray-300 mt-2">Revealing results...</p>
+        </motion.div>
+      )}
+
       {/* Voted Confirmation */}
-      {hasVoted && (
+      {hasVoted && !showAllVotedMessage && (
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -159,7 +205,7 @@ const VerdictPhase = () => {
         </motion.div>
       )}
 
-      {/* 🔧 FIX: Vote Tally - ONLY SHOW IN REVEAL PHASE */}
+      {/* Vote Tally - ONLY SHOW IN REVEAL PHASE */}
       {gamePhase === 'REVEAL' && votes.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
-import { gameHelpers } from '../../lib/supabase'
+import { supabase } from '../../lib/supabase'
 import confetti from 'canvas-confetti'
 
 const Results = () => {
@@ -10,7 +10,7 @@ const Results = () => {
   const navigate = useNavigate()
   
   const { gameResults, participants, myUserId, mySecret, leaveRoom } = useGameStore()
-  const [secrets, setSecrets] = useState([])
+  const [traitorDetails, setTraitorDetails] = useState(null) // ✨ NEW: Separate traitor state
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -23,17 +23,52 @@ const Results = () => {
       })
     }, 500)
 
-    // Load all secrets (game is over, so we can show them)
-    loadSecrets()
+    // Load traitor details
+    loadTraitorDetails()
   }, [])
 
-  const loadSecrets = async () => {
+  // ✨ NEW: Proper traitor fetching with fallback
+  const loadTraitorDetails = async () => {
     try {
-      // In a real implementation, you'd need a server function to reveal all secrets
-      // For now, we'll just show what we know
+      const traitorId = gameResults?.traitorId
+      
+      if (!traitorId) {
+        console.error('❌ No traitor ID in game results')
+        setLoading(false)
+        return
+      }
+
+      console.log('🔍 Looking for traitor:', traitorId)
+      console.log('👥 Participants:', participants.map(p => ({ id: p.user_id, name: p.username })))
+      
+      // First try participants array
+      let traitor = participants.find(p => p.user_id === traitorId)
+      
+      // If not found, fetch from database
+      if (!traitor) {
+        console.log('⚠️ Traitor not in participants array, fetching from database...')
+        
+        const { data, error } = await supabase
+          .from('room_participants')
+          .select('user_id, username, is_alive, role')
+          .eq('user_id', traitorId)
+          .eq('room_id', roomId)
+          .single()
+        
+        if (error) {
+          console.error('❌ Error fetching traitor from DB:', error)
+        } else if (data) {
+          traitor = data
+          console.log('✅ Fetched traitor from database:', traitor)
+        }
+      } else {
+        console.log('✅ Found traitor in participants:', traitor)
+      }
+      
+      setTraitorDetails(traitor)
       setLoading(false)
     } catch (error) {
-      console.error('Error loading secrets:', error)
+      console.error('❌ Error loading traitor details:', error)
       setLoading(false)
     }
   }
@@ -58,7 +93,6 @@ const Results = () => {
 
   const winner = gameResults?.winner
   const traitorId = gameResults?.traitorId
-  const traitor = participants.find(p => p.user_id === traitorId)
   const wasITraitor = myUserId === traitorId
   const didIWin = (winner === 'TRAITOR' && wasITraitor) || (winner === 'CITIZENS' && !wasITraitor)
 
@@ -98,11 +132,11 @@ const Results = () => {
             <p className="text-gray-400 mb-3">The traitor was...</p>
             <div className="flex items-center justify-center gap-4 mb-4">
               <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center text-3xl border-2 border-red-500">
-                {traitor?.username?.charAt(0).toUpperCase() || '?'}
+                {traitorDetails?.username?.charAt(0).toUpperCase() || '?'}
               </div>
               <div className="text-left">
                 <h2 className="text-3xl font-bold text-white">
-                  {traitor?.username || 'Unknown Player'}
+                  {traitorDetails?.username || 'Unknown Player'}
                 </h2>
                 <p className="text-red-400 font-semibold">
                   {wasITraitor ? '(You!)' : ''}
@@ -116,7 +150,7 @@ const Results = () => {
                   <span className={`font-bold ${
                     mySecret.role === 'TRAITOR' ? 'text-red-400' : 'text-blue-400'
                   }`}>
-                    {mySecret.role}
+                    {mySecret.role === 'TRAITOR' ? '🕵️ TRAITOR' : '👤 CITIZEN'}
                   </span>
                   <span className="text-gray-400 mx-2">-</span>
                   <span className="text-purple-400 font-bold text-xl">
@@ -137,38 +171,52 @@ const Results = () => {
         >
           <h3 className="text-2xl font-bold text-white mb-6 text-center">Final Standings</h3>
           <div className="space-y-3">
-            {participants.map((player) => (
-              <div
-                key={player.user_id}
-                className={`p-4 rounded-lg border-2 flex items-center justify-between ${
-                  player.user_id === traitorId
-                    ? 'bg-red-500/10 border-red-500'
-                    : 'bg-gray-900 border-gray-700'
-                } ${!player.is_alive ? 'opacity-50' : ''}`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
-                    {player.username?.charAt(0).toUpperCase() || '?'}
+            {participants.map((player) => {
+              const isTraitor = player.user_id === traitorId
+              const playerWon = (winner === 'TRAITOR' && isTraitor) || (winner === 'CITIZENS' && !isTraitor)
+              
+              return (
+                <div
+                  key={player.user_id}
+                  className={`p-4 rounded-lg border-2 flex items-center justify-between ${
+                    isTraitor
+                      ? 'bg-red-500/10 border-red-500'
+                      : 'bg-blue-500/10 border-blue-500'
+                  } ${!player.is_alive ? 'opacity-50' : ''}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      isTraitor ? 'bg-red-500/20' : 'bg-blue-500/20'
+                    }`}>
+                      {player.username?.charAt(0).toUpperCase() || '?'}
+                    </div>
+                    <div>
+                      <p className="text-white font-semibold">
+                        {player.username || `Player ${player.user_id.slice(0, 6)}`}
+                        {player.user_id === myUserId && ' (You)'}
+                      </p>
+                      <div className="flex items-center gap-2 text-sm">
+                        {isTraitor ? (
+                          <span className="text-red-400 font-semibold">🕵️ Traitor</span>
+                        ) : (
+                          <span className="text-blue-400 font-semibold">👤 Citizen</span>
+                        )}
+                        {playerWon && (
+                          <span className="text-green-400">• 🏆 Winner</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-white font-semibold">
-                      {player.username || `Player ${player.user_id.slice(0, 6)}`}
-                      {player.user_id === myUserId && ' (You)'}
-                    </p>
-                    {player.user_id === traitorId && (
-                      <p className="text-red-400 text-sm font-semibold">🕵️ Traitor</p>
+                  <div className="text-right">
+                    {player.is_alive ? (
+                      <span className="text-green-400 font-semibold">✓ Survived</span>
+                    ) : (
+                      <span className="text-red-400">❌ Eliminated</span>
                     )}
                   </div>
                 </div>
-                <div className="text-right">
-                  {player.is_alive ? (
-                    <span className="text-green-400 font-semibold">✓ Survived</span>
-                  ) : (
-                    <span className="text-red-400">❌ Eliminated</span>
-                  )}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </motion.div>
 

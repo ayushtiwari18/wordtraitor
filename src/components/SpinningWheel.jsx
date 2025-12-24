@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import PropTypes from 'prop-types'
+import { supabase } from '../lib/supabase'
+import useGameStore from '../store/gameStore'
 
 /**
  * SpinningWheel Component
@@ -10,17 +12,19 @@ import PropTypes from 'prop-types'
  * - Random selection without repeats
  * - Dark mystery theme (purple/gold)
  * - Host controls, all players see
+ * - ✨ NEW: Synced via Supabase Realtime broadcast
  */
 const SpinningWheel = ({ 
   players = [], 
   completedPlayerIds = [], 
   onSpinComplete, 
   isHost = false,
-  isSpinning = false 
+  isSpinning: externalIsSpinning = false 
 }) => {
   const [rotation, setRotation] = useState(0)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [spinning, setSpinning] = useState(false)
+  const { roomId } = useGameStore() // ✨ NEW: Get roomId for broadcast
 
   // Calculate available players (haven't gone yet)
   const availablePlayers = players.filter(
@@ -42,11 +46,47 @@ const SpinningWheel = ({
     }
   })
 
+  // ✨ NEW: Subscribe to wheel spin events from other players
+  useEffect(() => {
+    if (!roomId) return
+
+    const channel = supabase.channel(`room-${roomId}-wheel`)
+    
+    channel
+      .on('broadcast', { event: 'WHEEL_SPIN' }, (payload) => {
+        console.log('📡 Received WHEEL_SPIN broadcast:', payload)
+        const { selectedPlayerId, finalRotation, timestamp } = payload.payload
+        
+        // Find the selected player
+        const winner = players.find(p => p.user_id === selectedPlayerId)
+        
+        if (winner) {
+          console.log('🎯 Remote wheel spin to:', winner.username)
+          setSpinning(true)
+          setSelectedPlayer(null)
+          setRotation(prev => prev + finalRotation)
+          
+          // Complete animation after 5 seconds
+          setTimeout(() => {
+            setSpinning(false)
+            setSelectedPlayer(winner)
+            console.log('✅ Remote spin complete:', winner.username)
+          }, 5000)
+        }
+      })
+      .subscribe()
+
+    return () => {
+      channel.unsubscribe()
+    }
+  }, [roomId, players])
+
   /**
    * Spin the wheel to select next player
    * Uses cubic-bezier for realistic deceleration
+   * ✨ NEW: Broadcasts to all players via Realtime
    */
-  const spinWheel = () => {
+  const spinWheel = async () => {
     if (availablePlayers.length === 0) {
       console.log('🎯 All players completed, moving to next phase')
       return
@@ -68,7 +108,24 @@ const SpinningWheel = ({
 
     console.log('🎡 Spinning to:', winner.username, 'at', winnerAngle, 'degrees')
 
-    // Apply rotation
+    // ✨ NEW: Broadcast to all players
+    try {
+      const channel = supabase.channel(`room-${roomId}-wheel`)
+      await channel.send({
+        type: 'broadcast',
+        event: 'WHEEL_SPIN',
+        payload: {
+          selectedPlayerId: winner.user_id,
+          finalRotation,
+          timestamp: Date.now()
+        }
+      })
+      console.log('📡 Broadcasted WHEEL_SPIN to all players')
+    } catch (error) {
+      console.error('❌ Error broadcasting wheel spin:', error)
+    }
+
+    // Apply rotation locally for host
     setRotation(prev => prev + finalRotation)
 
     // Finish animation after 5 seconds
@@ -82,12 +139,12 @@ const SpinningWheel = ({
     }, 5000)
   }
 
-  // Sync external spinning state
+  // Sync external spinning state (for backwards compatibility)
   useEffect(() => {
-    if (isSpinning && !spinning) {
+    if (externalIsSpinning && !spinning && isHost) {
       spinWheel()
     }
-  }, [isSpinning])
+  }, [externalIsSpinning])
 
   return (
     <div className="spinning-wheel-container">
@@ -168,6 +225,16 @@ const SpinningWheel = ({
               </>
             )}
           </button>
+        </div>
+      )}
+
+      {/* Non-Host: Show spinning state */}
+      {!isHost && spinning && (
+        <div className="wheel-controls">
+          <div className="text-center text-gray-400 py-4">
+            <span className="text-2xl">🎲</span>
+            <p className="mt-2">Host is spinning...</p>
+          </div>
         </div>
       )}
 

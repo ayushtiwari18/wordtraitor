@@ -4,10 +4,19 @@ import useGameStore from '../../store/gameStore'
 import ChatBox from './ChatBox'
 
 const DebatePhase = () => {
-  const { hints, participants, room, phaseTimer, getAliveParticipants } = useGameStore()
+  const { 
+    hints, 
+    participants, 
+    room, 
+    phaseTimer, 
+    getAliveParticipants,
+    isHost,
+    advancePhase 
+  } = useGameStore()
 
   const alivePlayers = getAliveParticipants()
   const isSilentMode = room?.game_mode === 'SILENT'
+  const isRealMode = room?.game_mode === 'REAL'
 
   // Group hints by user
   const hintsWithUsers = hints.map(hint => {
@@ -18,15 +27,66 @@ const DebatePhase = () => {
     }
   })
 
+  const handleEndDebate = async () => {
+    console.log('🏁 Host ending debate phase')
+    try {
+      await advancePhase()
+    } catch (error) {
+      console.error('❌ Error ending debate:', error)
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto p-6" data-testid="debate-phase-container">
       {/* Header */}
       <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-white mb-2">💬 Debate Time</h2>
+        <h2 className="text-3xl font-bold text-white mb-2">
+          {isRealMode ? '🎤 Voice Discussion' : '💬 Debate Time'}
+        </h2>
         <p className="text-gray-400">
-          {isSilentMode ? 'Discuss the hints in chat and identify the traitor' : 'Discuss the hints and identify the traitor'}
+          {isSilentMode 
+            ? 'Discuss the hints in chat and identify the traitor' 
+            : 'Discuss the hints over voice chat and identify the traitor'
+          }
         </p>
-        <div data-testid="phase-timer" className="mt-4 text-3xl font-bold text-orange-400">{phaseTimer}s</div>
+        
+        {/* Timer - SILENT mode only */}
+        {isSilentMode && (
+          <div data-testid="phase-timer" className="mt-4 text-3xl font-bold text-orange-400">
+            {phaseTimer}s
+          </div>
+        )}
+
+        {/* Host Control - REAL mode only */}
+        {isRealMode && isHost && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6"
+          >
+            <button
+              onClick={handleEndDebate}
+              className="px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-xl font-bold text-white text-lg shadow-lg transition-all transform hover:scale-105 flex items-center gap-3 mx-auto"
+            >
+              <span className="text-2xl">✅</span>
+              End Debate → Vote Now
+            </button>
+            <p className="text-sm text-gray-400 mt-2">Click when discussion is complete</p>
+          </motion.div>
+        )}
+
+        {/* Non-Host Message - REAL mode only */}
+        {isRealMode && !isHost && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-6 p-4 bg-gray-800 border-2 border-gray-700 rounded-xl"
+          >
+            <p className="text-gray-400">
+              ⏳ Waiting for host to start voting...
+            </p>
+          </motion.div>
+        )}
       </div>
 
       {/* Main Content Area */}
@@ -124,6 +184,12 @@ const DebatePhase = () => {
             <li className="flex items-start gap-2">
               <span className="text-blue-400">•</span>
               <span>Use the chat to discuss suspicions and coordinate votes</span>
+            </li>
+          )}
+          {isRealMode && (
+            <li className="flex items-start gap-2">
+              <span className="text-blue-400">•</span>
+              <span>Host: End debate when everyone has shared their thoughts</span>
             </li>
           )}
         </ul>
