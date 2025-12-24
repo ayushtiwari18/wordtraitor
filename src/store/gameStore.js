@@ -554,8 +554,13 @@ const useGameStore = create((set, get) => ({
     
     console.log(`⏰ Syncing ${phaseName}: ${remaining}s remaining (${elapsed}s elapsed)`)
     
+    // ✅ BUG FIX #9: Clear interval BEFORE setting gamePhase to prevent stale interval checks
     const { phaseInterval } = get()
-    if (phaseInterval) clearInterval(phaseInterval)
+    if (phaseInterval) {
+      clearInterval(phaseInterval)
+      set({ phaseInterval: null })
+      console.log('🗑️ Cleared stale phase interval')
+    }
     
     let timeLeft = remaining
     set({ phaseTimer: timeLeft })
@@ -565,9 +570,13 @@ const useGameStore = create((set, get) => ({
         timeLeft -= 1
         set({ phaseTimer: timeLeft })
         
-        if (get().canAdvancePhaseEarly()) {
+        // ✅ BUG FIX #9: Re-fetch current phase to prevent stale checks
+        const currentPhase = get().gamePhase
+        
+        // ✅ BUG FIX #9: Only check early completion if we're STILL in the same phase
+        if (currentPhase === phaseName && get().canAdvancePhaseEarly()) {
           clearInterval(interval)
-          set({ phaseInterval: null }) // ✅ BUG FIX #6: Clear interval reference
+          set({ phaseInterval: null })
           console.log(`⚡ ${phaseName} complete early! All players submitted.`)
           
           const { isHost } = get()
@@ -584,9 +593,17 @@ const useGameStore = create((set, get) => ({
           return
         }
         
+        // ✅ BUG FIX #9: Safety check - if phase changed externally, stop this timer
+        if (currentPhase !== phaseName) {
+          console.log(`🚫 Phase mismatch: interval for ${phaseName} but current is ${currentPhase}. Stopping stale timer.`)
+          clearInterval(interval)
+          set({ phaseInterval: null })
+          return
+        }
+        
         if (timeLeft <= 0) {
           clearInterval(interval)
-          set({ phaseInterval: null }) // ✅ BUG FIX #6: Clear interval reference
+          set({ phaseInterval: null })
           console.log(`⏰ ${phaseName} phase ended`)
           
           const { isHost } = get()
@@ -682,8 +699,13 @@ const useGameStore = create((set, get) => ({
     const duration = get().getPhaseDuration(phaseName)
     console.log(`⏰ Starting ${phaseName} phase (${duration}s)`)
     
+    // ✅ BUG FIX #9: Clear interval BEFORE setting gamePhase to prevent stale interval checks
     const { phaseInterval } = get()
-    if (phaseInterval) clearInterval(phaseInterval)
+    if (phaseInterval) {
+      clearInterval(phaseInterval)
+      set({ phaseInterval: null })
+      console.log('🗑️ Cleared stale phase interval')
+    }
     
     let timeLeft = duration
     set({ phaseTimer: timeLeft })
@@ -692,9 +714,13 @@ const useGameStore = create((set, get) => ({
       timeLeft -= 1
       set({ phaseTimer: timeLeft })
       
-      if (get().canAdvancePhaseEarly()) {
+      // ✅ BUG FIX #9: Re-fetch current phase to prevent stale checks
+      const currentPhase = get().gamePhase
+      
+      // ✅ BUG FIX #9: Only check early completion if we're STILL in the same phase
+      if (currentPhase === phaseName && get().canAdvancePhaseEarly()) {
         clearInterval(interval)
-        set({ phaseInterval: null }) // ✅ BUG FIX #6: Clear interval reference
+        set({ phaseInterval: null })
         console.log(`⚡ ${phaseName} complete early! All players submitted.`)
         
         const { isHost } = get()
@@ -711,9 +737,17 @@ const useGameStore = create((set, get) => ({
         return
       }
       
+      // ✅ BUG FIX #9: Safety check - if phase changed externally, stop this timer
+      if (currentPhase !== phaseName) {
+        console.log(`🚫 Phase mismatch: interval for ${phaseName} but current is ${currentPhase}. Stopping stale timer.`)
+        clearInterval(interval)
+        set({ phaseInterval: null })
+        return
+      }
+      
       if (timeLeft <= 0) {
         clearInterval(interval)
-        set({ phaseInterval: null }) // ✅ BUG FIX #6: Clear interval reference
+        set({ phaseInterval: null })
         console.log(`⏰ ${phaseName} phase ended`)
         
         const { isHost } = get()
