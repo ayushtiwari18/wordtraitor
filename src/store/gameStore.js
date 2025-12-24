@@ -55,10 +55,14 @@ const useGameStore = create((set, get) => ({
   realtimeChannel: null,
   isConnected: false,
   subscriptionState: null,
+  activeChannelId: null, // ✅ BUG FIX #5: Track active channel to prevent duplicates
   
   // ✅ FIX #5: Heartbeat system
   heartbeatInterval: null,
   lastSyncAttempt: 0, // Rate limit auto-sync
+  
+  // ✅ BUG FIX #5: Debounce participant updates
+  participantUpdateTimeout: null,
   
   // UI state
   isLoading: false,
@@ -429,6 +433,7 @@ const useGameStore = create((set, get) => ({
         realtimeChannel: null,
         isConnected: false,
         subscriptionState: null,
+        activeChannelId: null,  // ✅ BUG FIX #5: Reset channel ID
         showResults: false,
         gameResults: null,
         pendingRoomLoad: null,
@@ -984,10 +989,11 @@ const useGameStore = create((set, get) => ({
   // ==========================================
   
   subscribeToRoom: (roomId) => {
-    const { subscriptionState, realtimeChannel: existingChannel } = get()
+    const { subscriptionState, realtimeChannel: existingChannel, activeChannelId } = get()
     
-    if (subscriptionState === 'connecting' || subscriptionState === 'connected') {
-      console.log('⏭️ Subscription already active, skipping')
+    // ✅ BUG FIX #5: Prevent duplicate subscriptions
+    if (activeChannelId === roomId && (subscriptionState === 'connecting' || subscriptionState === 'connected')) {
+      console.log('⏭️ Subscription already active for this room, skipping')
       return
     }
     
@@ -996,7 +1002,7 @@ const useGameStore = create((set, get) => ({
       realtimeHelpers.unsubscribe(existingChannel)
     }
     
-    set({ subscriptionState: 'connecting' })
+    set({ subscriptionState: 'connecting', activeChannelId: roomId })
     console.log('📡 Subscribing to real-time updates for room:', roomId)
     
     const channel = realtimeHelpers.subscribeToRoom(roomId, {
@@ -1065,15 +1071,16 @@ const useGameStore = create((set, get) => ({
       },
       
       onParticipantUpdate: async (payload) => {
-        // 🔧 CYCLE 1 FIX: Filter out heartbeat-only updates to reduce UI spam
+        // ✅ BUG FIX #5: Enhanced heartbeat filter with debouncing
         if (payload.eventType === 'UPDATE') {
-          // Check if only last_seen changed (heartbeat update)
           const oldData = payload.old || {}
           const newData = payload.new || {}
           
+          // Check if ONLY last_seen changed (heartbeat update)
           const meaningfulFieldsChanged = 
             oldData.is_alive !== newData.is_alive ||
             oldData.username !== newData.username ||
+            oldData.role !== newData.role ||
             oldData.user_id !== newData.user_id
           
           if (!meaningfulFieldsChanged) {
@@ -1086,10 +1093,20 @@ const useGameStore = create((set, get) => ({
           console.log('👥 Participants updated (INSERT/DELETE)')
         }
         
-        const roomId = get().roomId
-        if (!roomId) return
-        const participants = await gameHelpers.getParticipants(roomId)
-        set({ participants })
+        // ✅ BUG FIX #5: Debounce participant updates (200ms)
+        const { participantUpdateTimeout } = get()
+        if (participantUpdateTimeout) {
+          clearTimeout(participantUpdateTimeout)
+        }
+        
+        const timeout = setTimeout(async () => {
+          const roomId = get().roomId
+          if (!roomId) return
+          const participants = await gameHelpers.getParticipants(roomId)
+          set({ participants })
+        }, 200)
+        
+        set({ participantUpdateTimeout: timeout })
       },
       
       onHintSubmitted: async (payload) => {
