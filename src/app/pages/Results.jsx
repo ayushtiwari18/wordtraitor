@@ -30,7 +30,9 @@ const Results = () => {
   // ✨ NEW: Proper traitor fetching with fallback
   const loadTraitorDetails = async () => {
     try {
-      const traitorId = gameResults?.traitorId
+      // ✅ BUG FIX #4: Handle both traitorIds (array) and traitorId (singular)
+      const traitorIds = gameResults?.traitorIds || []
+      const traitorId = traitorIds[0] || gameResults?.traitorId  // Backwards compatibility
       
       if (!traitorId) {
         console.error('❌ No traitor ID in game results')
@@ -92,7 +94,9 @@ const Results = () => {
   }
 
   const winner = gameResults?.winner
-  const traitorId = gameResults?.traitorId
+  // ✅ BUG FIX #4: Use same logic as loadTraitorDetails for consistency
+  const traitorIds = gameResults?.traitorIds || []
+  const traitorId = traitorIds[0] || gameResults?.traitorId
   const wasITraitor = myUserId === traitorId
   const didIWin = (winner === 'TRAITOR' && wasITraitor) || (winner === 'CITIZENS' && !wasITraitor)
 
