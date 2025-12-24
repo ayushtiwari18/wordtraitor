@@ -193,13 +193,13 @@ const Home = () => {
           {/* Logo - supports image or emoji fallback */}
           {!logoError ? (
             <img 
-              src="/logo.png" 
+              src="/Logo.png" 
               alt="WordTraitor Logo"
               className="h-12 w-12 object-contain"
               onError={() => setLogoError(true)}
             />
           ) : (
-            <div className="text-5xl">🕵️</div>
+            <div className="text-5xl"></div>
           )}
           <div>
             <h1 className="text-2xl font-bold text-white">WordTraitor</h1>
@@ -237,7 +237,7 @@ const Home = () => {
               }}
               className="text-8xl mb-6"
             >
-              🕵️
+               <img src="/Header.png" alt="Word Traitor Logo" className="inline-block w-32 h-32 mr-2" /> 
             </motion.div>
             <h1 className="text-6xl font-bold text-white mb-4">
               Word<span className="text-red-500 text-glow-purple">Traitor</span>
@@ -249,7 +249,7 @@ const Home = () => {
               animate={{ opacity: [0.7, 1, 0.7] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              🕵️ Someone knows the word. Someone will betray you.
+             <img src="/Header.png" alt="Word Traitor Logo" className="inline-block w-8 h-8 mr-2" /> Someone knows the word. Someone will betray you.
             </motion.p>
             
             {/* Secondary tagline */}
@@ -600,7 +600,7 @@ const Home = () => {
                                 max="300"
                                 value={verdictTime}
                                 onChange={(e) => setVerdictTime(parseInt(e.target.value) || 45)}
-                                onClick=(e) => e.target.select()}
+                                onClick={(e) => e.target.select()}
                                 className="w-20 min-h-[44px] bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-500 touch-manipulation"
                               />
                             </div>
