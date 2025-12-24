@@ -1,68 +1,133 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle, XCircle, Info, X } from 'lucide-react'
+import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react'
 import { useEffect } from 'react'
-import { useUIStore } from '@/store/uiStore'
 
-const Toast = ({ id, type = 'info', message, duration = 3000 }) => {
-  const removeToast = useUIStore(state => state.removeToast)
-  
+const Toast = ({
+  message,
+  type = 'info',
+  isOpen,
+  onClose,
+  duration = 5000,
+  position = 'top-right',
+  showIcon = true,
+  action,
+  actionLabel = 'Undo'
+}) => {
   useEffect(() => {
-    if (duration) {
+    if (isOpen && duration) {
       const timer = setTimeout(() => {
-        removeToast(id)
+        onClose()
       }, duration)
-      
+
       return () => clearTimeout(timer)
     }
-  }, [id, duration, removeToast])
-  
-  const icons = {
-    success: <CheckCircle size={20} className="text-green-500" />,
-    error: <XCircle size={20} className="text-red-500" />,
-    info: <Info size={20} className="text-blue-500" />
+  }, [isOpen, duration, onClose])
+
+  const positions = {
+    'top-right': 'top-4 right-4',
+    'top-left': 'top-4 left-4',
+    'top-center': 'top-4 left-1/2 -translate-x-1/2',
+    'bottom-right': 'bottom-4 right-4',
+    'bottom-left': 'bottom-4 left-4',
+    'bottom-center': 'bottom-4 left-1/2 -translate-x-1/2'
   }
-  
-  const styles = {
-    success: 'border-green-500/50 bg-green-500/10',
-    error: 'border-red-500/50 bg-red-500/10',
-    info: 'border-blue-500/50 bg-blue-500/10'
+
+  const variants = {
+    info: {
+      bg: 'bg-gradient-to-r from-blue-600 to-blue-700',
+      icon: Info,
+      color: 'text-blue-300'
+    },
+    success: {
+      bg: 'bg-gradient-to-r from-green-600 to-green-700',
+      icon: CheckCircle,
+      color: 'text-green-300'
+    },
+    error: {
+      bg: 'bg-gradient-to-r from-red-600 to-red-700',
+      icon: AlertCircle,
+      color: 'text-red-300'
+    },
+    warning: {
+      bg: 'bg-gradient-to-r from-yellow-600 to-yellow-700',
+      icon: AlertTriangle,
+      color: 'text-yellow-300'
+    }
   }
-  
+
+  const variant = variants[type]
+  const Icon = variant.icon
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -20, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -20, scale: 0.95 }}
-      className={`
-        flex items-center gap-3 p-4 rounded-lg border
-        bg-dark-card shadow-lg min-w-[300px] max-w-md
-        ${styles[type]}
-      `}
-    >
-      {icons[type]}
-      <p className="flex-1 text-sm text-white">{message}</p>
-      <button
-        onClick={() => removeToast(id)}
-        className="text-gray-400 hover:text-white transition-colors"
-      >
-        <X size={16} />
-      </button>
-    </motion.div>
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0, y: position.includes('top') ? -50 : 50, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.9, x: position.includes('right') ? 100 : position.includes('left') ? -100 : 0 }}
+          transition={{ type: 'spring', duration: 0.5, bounce: 0.3 }}
+          className={`fixed ${positions[position]} z-50 max-w-md w-full pointer-events-auto`}
+        >
+          <motion.div
+            className={`
+              ${variant.bg} text-white rounded-lg shadow-2xl
+              border border-white/20 backdrop-blur-sm
+              p-4 flex items-start gap-3
+            `}
+            whileHover={{ scale: 1.02 }}
+          >
+            {/* Icon */}
+            {showIcon && (
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', delay: 0.1 }}
+                className="flex-shrink-0"
+              >
+                <Icon size={24} />
+              </motion.div>
+            )}
+
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium leading-relaxed">{message}</p>
+              
+              {action && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={action}
+                  className="mt-2 text-xs font-semibold underline hover:no-underline"
+                >
+                  {actionLabel}
+                </motion.button>
+              )}
+            </div>
+
+            {/* Close Button */}
+            <motion.button
+              whileHover={{ scale: 1.1, rotate: 90 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={onClose}
+              className="flex-shrink-0 text-white/70 hover:text-white transition-colors"
+            >
+              <X size={18} />
+            </motion.button>
+
+            {/* Progress Bar */}
+            {duration && (
+              <motion.div
+                className="absolute bottom-0 left-0 h-1 bg-white/30 rounded-b-lg"
+                initial={{ width: '100%' }}
+                animate={{ width: '0%' }}
+                transition={{ duration: duration / 1000, ease: 'linear' }}
+              />
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
-const ToastContainer = () => {
-  const toasts = useUIStore(state => state.toasts)
-  
-  return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2">
-      <AnimatePresence>
-        {toasts.map(toast => (
-          <Toast key={toast.id} {...toast} />
-        ))}
-      </AnimatePresence>
-    </div>
-  )
-}
-
-export default ToastContainer
+export default Toast
