@@ -601,6 +601,33 @@ const useGameStore = create((set, get) => ({
             })()
           } else {
             console.log('⏳ Waiting for host to advance phase...')
+            
+            // ✅ NEW FIX: Add fallback polling to recover from missed realtime events
+            setTimeout(async () => {
+              try {
+                const { roomId, gamePhase: currentPhase } = get()
+                if (!roomId) return
+                
+                const room = await gameHelpers.getRoom(roomId)
+                
+                if (room.current_phase && room.current_phase !== currentPhase) {
+                  console.log(`🔧 Phase mismatch detected! Server: ${room.current_phase}, Local: ${currentPhase}`)
+                  console.log(`🔄 Auto-syncing to server phase: ${room.current_phase}`)
+                  
+                  set({ 
+                    room, 
+                    gamePhase: room.current_phase,
+                    currentRound: room.current_round || get().currentRound
+                  })
+                  
+                  if (room.phase_started_at) {
+                    get().syncPhaseTimer(room.current_phase, room.phase_started_at)
+                  }
+                }
+              } catch (error) {
+                console.error('❌ Failed to fetch room state for sync:', error)
+              }
+            }, 2000) // Poll 2 seconds after timer expires
           }
         }
       }, 1000)
@@ -696,6 +723,33 @@ const useGameStore = create((set, get) => ({
           })()
         } else {
           console.log('⏳ Waiting for host to advance phase...')
+          
+          // ✅ NEW FIX: Add fallback polling to recover from missed realtime events
+          setTimeout(async () => {
+            try {
+              const { roomId, gamePhase: currentPhase } = get()
+              if (!roomId) return
+              
+              const room = await gameHelpers.getRoom(roomId)
+              
+              if (room.current_phase && room.current_phase !== currentPhase) {
+                console.log(`🔧 Phase mismatch detected! Server: ${room.current_phase}, Local: ${currentPhase}`)
+                console.log(`🔄 Auto-syncing to server phase: ${room.current_phase}`)
+                
+                set({ 
+                  room, 
+                  gamePhase: room.current_phase,
+                  currentRound: room.current_round || get().currentRound
+                })
+                
+                if (room.phase_started_at) {
+                  get().syncPhaseTimer(room.current_phase, room.phase_started_at)
+                }
+              }
+            } catch (error) {
+              console.error('❌ Failed to fetch room state for sync:', error)
+            }
+          }, 2000) // Poll 2 seconds after timer expires
         }
       }
     }, 1000)
