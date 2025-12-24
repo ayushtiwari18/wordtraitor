@@ -57,6 +57,16 @@ const HintDropPhase = () => {
     setHasSubmitted(!!myHint)
   }, [hints, myUserId])
 
+  // ✅ NEW FIX: Sync completedPlayerIds from hints (for REAL mode persistence)
+  useEffect(() => {
+    if (room?.game_mode === 'REAL') {
+      // Extract user IDs who have submitted [VERBAL] hints
+      const completed = hints.map(h => h.user_id)
+      setCompletedPlayerIds(completed)
+      console.log(`🔄 REAL mode: ${completed.length} players have completed turns`)
+    }
+  }, [hints, room?.game_mode])
+
   // 🔧 CYCLE 4 FIX: useCallback for stable function references
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault()
@@ -92,28 +102,46 @@ const HintDropPhase = () => {
     console.log('🎯 Wheel selected:', selectedPlayer.username)
     setCurrentSpeaker(selectedPlayer)
     setIsSpinning(false)
-    setCompletedPlayerIds(prev => [...prev, selectedPlayer.user_id])
   }, [])
 
-  const handleMarkComplete = useCallback(() => {
+  const handleMarkComplete = useCallback(async () => {
     if (!currentSpeaker) return
     
     console.log('✅ Marking complete:', currentSpeaker.username)
-    setCurrentSpeaker(null)
     
-    const alivePlayers = getAliveParticipants()
-    if (completedPlayerIds.length + 1 >= alivePlayers.length) {
-      console.log('🎉 All players completed! Host will advance to VERDICT')
+    // ✅ FIX: Persist completion via database (submit [VERBAL] hint)
+    try {
+      setIsSubmitting(true)
+      const { submitHint, roomId, currentRound } = useGameStore.getState()
+      const { gameHelpers } = await import('../../lib/supabase')
       
-      // ✅ BUG FIX #2: Actually call advancePhase when all players complete
-      if (isHost) {
+      // Submit [VERBAL] hint to mark player as complete
+      await gameHelpers.submitHint(roomId, currentSpeaker.user_id, '[VERBAL]', currentRound)
+      
+      // Reload hints to update UI
+      await loadHints()
+      
+      setCurrentSpeaker(null)
+      setIsSubmitting(false)
+      
+      console.log(`✅ Completion persisted for ${currentSpeaker.username}`)
+      
+      // Check if all players completed
+      const alivePlayers = getAliveParticipants()
+      const newCompletedCount = completedPlayerIds.length + 1
+      
+      if (newCompletedCount >= alivePlayers.length && isHost) {
+        console.log('🎉 All players completed! Auto-advancing to next phase...')
         setTimeout(() => {
           const { advancePhase } = useGameStore.getState()
           advancePhase()
-        }, 1000)  // 1s delay for visual feedback
+        }, 1500) // 1.5s delay for visual feedback
       }
+    } catch (error) {
+      console.error('❌ Error persisting completion:', error)
+      setIsSubmitting(false)
     }
-  }, [currentSpeaker, completedPlayerIds.length, getAliveParticipants, isHost])
+  }, [currentSpeaker, completedPlayerIds, getAliveParticipants, isHost, loadHints])
 
   // 🔧 CYCLE 4 FIX: useMemo for expensive derived state
   const alivePlayers = useMemo(() => {
@@ -207,10 +235,15 @@ const HintDropPhase = () => {
               {isHost && (
                 <button
                   onClick={handleMarkComplete}
-                  className="px-8 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold text-white transition-colors flex items-center gap-2 mx-auto"
+                  disabled={isSubmitting}
+                  className="px-8 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-colors flex items-center gap-2 mx-auto"
                 >
-                  ✅ Done - Next Player
-                  <ArrowRight className="w-5 h-5" />
+                  {isSubmitting ? 'Saving...' : (
+                    <>
+                      ✅ Done - Next Player
+                      <ArrowRight className="w-5 h-5" />
+                    </>
+                  )}
                 </button>
               )}
 
