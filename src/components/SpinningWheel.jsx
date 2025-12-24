@@ -5,14 +5,14 @@ import useGameStore from '../store/gameStore'
 
 /**
  * SpinningWheel Component
- * Mystery-themed wheel for REAL mode turn selection
+ * Realistic 3D casino-style wheel for REAL mode turn selection
  * 
  * Features:
- * - Smooth CSS animation with cubic-bezier easing
- * - Random selection without repeats
- * - Dark mystery theme (purple/gold)
- * - Host controls, all players see
- * - ✨ NEW: Synced via Supabase Realtime broadcast
+ * - 3D perspective with depth shadows
+ * - Vegas-style gold metallic rim
+ * - Realistic physics (ease-out with bounce)
+ * - Synced via Supabase Realtime broadcast
+ * - Professional casino aesthetics
  */
 const SpinningWheel = ({ 
   players = [], 
@@ -24,7 +24,7 @@ const SpinningWheel = ({
   const [rotation, setRotation] = useState(0)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [spinning, setSpinning] = useState(false)
-  const { roomId } = useGameStore() // ✨ NEW: Get roomId for broadcast
+  const { roomId } = useGameStore()
 
   // Calculate available players (haven't gone yet)
   const availablePlayers = players.filter(
@@ -34,19 +34,28 @@ const SpinningWheel = ({
   const totalPlayers = players.length
   const segmentAngle = 360 / totalPlayers
 
-  // Generate wheel segments
+  // Generate wheel segments with alternating colors
   const segments = players.map((player, index) => {
     const isCompleted = completedPlayerIds.includes(player.user_id)
     const rotation = segmentAngle * index
     
+    // Alternating purple/pink gradient
+    const isEven = index % 2 === 0
+    const color = isCompleted 
+      ? '#374151' // Gray for completed
+      : isEven 
+        ? 'linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)' // Purple
+        : 'linear-gradient(135deg, #ec4899 0%, #f472b6 100%)' // Pink
+    
     return {
       ...player,
       rotation,
-      isCompleted
+      isCompleted,
+      color
     }
   })
 
-  // ✨ NEW: Subscribe to wheel spin events from other players
+  // Subscribe to wheel spin events from other players
   useEffect(() => {
     if (!roomId) return
 
@@ -66,12 +75,12 @@ const SpinningWheel = ({
           setSelectedPlayer(null)
           setRotation(prev => prev + finalRotation)
           
-          // Complete animation after 5 seconds
+          // Complete animation after 6 seconds
           setTimeout(() => {
             setSpinning(false)
             setSelectedPlayer(winner)
             console.log('✅ Remote spin complete:', winner.username)
-          }, 5000)
+          }, 6000)
         }
       })
       .subscribe()
@@ -83,8 +92,8 @@ const SpinningWheel = ({
 
   /**
    * Spin the wheel to select next player
-   * Uses cubic-bezier for realistic deceleration
-   * ✨ NEW: Broadcasts to all players via Realtime
+   * Uses realistic ease-out with slight bounce
+   * Broadcasts to all players via Realtime
    */
   const spinWheel = async () => {
     if (availablePlayers.length === 0) {
@@ -100,15 +109,15 @@ const SpinningWheel = ({
     const winner = availablePlayers[randomIndex]
     const winnerGlobalIndex = players.findIndex(p => p.user_id === winner.user_id)
 
-    // Calculate rotation: 3-5 full spins + angle to winner
-    const fullSpins = 3 + Math.floor(Math.random() * 3) // 3-5 spins
+    // Calculate rotation: 4-6 full spins + angle to winner
+    const fullSpins = 4 + Math.floor(Math.random() * 3) // 4-6 spins
     const winnerAngle = segmentAngle * winnerGlobalIndex
     const extraSpin = 360 * fullSpins
     const finalRotation = extraSpin + (360 - winnerAngle) + (segmentAngle / 2)
 
     console.log('🎡 Spinning to:', winner.username, 'at', winnerAngle, 'degrees')
 
-    // ✨ NEW: Broadcast to all players
+    // Broadcast to all players
     try {
       const channel = supabase.channel(`room-${roomId}-wheel`)
       await channel.send({
@@ -128,7 +137,7 @@ const SpinningWheel = ({
     // Apply rotation locally for host
     setRotation(prev => prev + finalRotation)
 
-    // Finish animation after 5 seconds
+    // Finish animation after 6 seconds (realistic casino timing)
     setTimeout(() => {
       setSpinning(false)
       setSelectedPlayer(winner)
@@ -136,7 +145,7 @@ const SpinningWheel = ({
         onSpinComplete(winner)
       }
       console.log('✅ Spin complete:', winner.username)
-    }, 5000)
+    }, 6000)
   }
 
   // Sync external spinning state (for backwards compatibility)
@@ -150,7 +159,7 @@ const SpinningWheel = ({
     <div className="spinning-wheel-container">
       {/* Wheel Title */}
       <div className="wheel-title">
-        <h3>🎭 Circle of Secrets</h3>
+        <h3>🎰 Wheel of Fortune</h3>
         <p className="text-sm text-gray-400">
           {availablePlayers.length === 0 
             ? '✅ All players have spoken' 
@@ -159,46 +168,62 @@ const SpinningWheel = ({
         </p>
       </div>
 
-      {/* Wheel Container */}
+      {/* 3D Wheel Container */}
       <div className="wheel-wrapper">
-        {/* Arrow/Pointer */}
+        {/* Arrow/Pointer with 3D effect */}
         <div className="wheel-pointer">
+          <div className="pointer-shadow"></div>
           <div className="pointer-triangle"></div>
         </div>
 
-        {/* The Wheel */}
-        <div 
-          className={`wheel ${spinning ? 'spinning' : ''}`}
-          style={{
-            transform: `rotate(${rotation}deg)`,
-            transition: spinning 
-              ? 'transform 5s cubic-bezier(0.17, 0.67, 0.12, 0.99)' 
-              : 'none'
-          }}
-        >
-          {segments.map((segment, index) => (
-            <div
-              key={segment.user_id}
-              className={`wheel-segment ${segment.isCompleted ? 'completed' : ''}`}
-              style={{
-                transform: `rotate(${segment.rotation}deg)`,
-                '--segment-color': segment.isCompleted 
-                  ? '#4a5568' // Gray for completed
-                  : `hsl(${(index * 360) / totalPlayers}, 70%, 50%)` // Rainbow colors
-              }}
-            >
-              <div className="segment-content">
-                <span className="segment-text">
-                  {segment.username}
-                  {segment.isCompleted && ' ✓'}
-                </span>
-              </div>
-            </div>
-          ))}
+        {/* The Wheel with 3D perspective */}
+        <div className="wheel-scene">
+          <div 
+            className={`wheel ${spinning ? 'spinning' : ''}`}
+            style={{
+              transform: `rotate(${rotation}deg)`,
+              transition: spinning 
+                ? 'transform 6s cubic-bezier(0.17, 0.67, 0.05, 0.98)' // Realistic ease-out
+                : 'none'
+            }}
+          >
+            {/* Tick marks around rim */}
+            {Array.from({ length: totalPlayers * 4 }).map((_, i) => (
+              <div
+                key={`tick-${i}`}
+                className="rim-tick"
+                style={{
+                  transform: `rotate(${(360 / (totalPlayers * 4)) * i}deg)`
+                }}
+              />
+            ))}
 
-          {/* Center Circle */}
-          <div className="wheel-center">
-            <div className="center-dot"></div>
+            {/* Player segments */}
+            {segments.map((segment, index) => (
+              <div
+                key={segment.user_id}
+                className={`wheel-segment ${segment.isCompleted ? 'completed' : ''}`}
+                style={{
+                  transform: `rotate(${segment.rotation}deg)`,
+                  background: segment.color,
+                  zIndex: totalPlayers - index
+                }}
+              >
+                <div className="segment-content">
+                  <span className="segment-text">
+                    {segment.username}
+                    {segment.isCompleted && ' ✓'}
+                  </span>
+                </div>
+              </div>
+            ))}
+
+            {/* Center Hub with glow */}
+            <div className="wheel-center">
+              <div className="center-ring"></div>
+              <div className="center-dot"></div>
+              <div className="center-glow"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -221,7 +246,7 @@ const SpinningWheel = ({
             ) : (
               <>
                 <span className="spin-icon">🎲</span>
-                Spin the Wheel
+                Spin to Win
               </>
             )}
           </button>
@@ -232,7 +257,7 @@ const SpinningWheel = ({
       {!isHost && spinning && (
         <div className="wheel-controls">
           <div className="text-center text-gray-400 py-4">
-            <span className="text-2xl">🎲</span>
+            <span className="text-2xl animate-pulse">🎰</span>
             <p className="mt-2">Host is spinning...</p>
           </div>
         </div>
@@ -242,10 +267,10 @@ const SpinningWheel = ({
       {selectedPlayer && !spinning && (
         <div className="selected-player">
           <div className="selected-badge">
-            <span className="badge-icon">👤</span>
+            <span className="badge-icon">🎯</span>
             <div>
-              <p className="text-sm text-gray-400">Next Speaker</p>
-              <p className="text-xl font-bold text-purple-300">
+              <p className="text-sm text-gray-400">Winner!</p>
+              <p className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">
                 {selectedPlayer.username}
               </p>
             </div>
@@ -253,7 +278,6 @@ const SpinningWheel = ({
         </div>
       )}
 
-      {/* 🔧 CYCLE 3 FIX: Changed <style jsx> to <style> (removes React warning) */}
       <style>{`
         .spinning-wheel-container {
           display: flex;
@@ -261,44 +285,80 @@ const SpinningWheel = ({
           align-items: center;
           gap: 2rem;
           padding: 2rem;
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-          border-radius: 1rem;
-          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-        }
-
-        .wheel-title {
-          text-align: center;
+          background: linear-gradient(135deg, #0f0f23 0%, #1a0a2e 100%);
+          border-radius: 1.5rem;
+          box-shadow: 
+            0 20px 60px rgba(0, 0, 0, 0.8),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
         }
 
         .wheel-title h3 {
-          font-size: 1.5rem;
+          font-size: 2rem;
           font-weight: bold;
-          color: #d4af37;
+          background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
           margin-bottom: 0.5rem;
-          text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+          text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
         }
 
         .wheel-wrapper {
           position: relative;
-          width: 400px;
-          height: 400px;
+          width: 450px;
+          height: 450px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
         .wheel-pointer {
           position: absolute;
-          top: -20px;
+          top: -15px;
           left: 50%;
           transform: translateX(-50%);
-          z-index: 10;
+          z-index: 100;
+          filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.8));
+        }
+
+        .pointer-shadow {
+          position: absolute;
+          width: 50px;
+          height: 50px;
+          top: 0;
+          left: 50%;
+          transform: translateX(-50%);
+          background: radial-gradient(circle, rgba(0, 0, 0, 0.6) 0%, transparent 70%);
+          filter: blur(8px);
         }
 
         .pointer-triangle {
+          position: relative;
           width: 0;
           height: 0;
-          border-left: 20px solid transparent;
-          border-right: 20px solid transparent;
-          border-top: 40px solid #d4af37;
-          filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+          border-left: 22px solid transparent;
+          border-right: 22px solid transparent;
+          border-top: 50px solid #fbbf24;
+          filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+        }
+
+        .pointer-triangle::after {
+          content: '';
+          position: absolute;
+          top: -48px;
+          left: -18px;
+          width: 0;
+          height: 0;
+          border-left: 18px solid transparent;
+          border-right: 18px solid transparent;
+          border-top: 42px solid #fcd34d;
+        }
+
+        .wheel-scene {
+          position: relative;
+          width: 420px;
+          height: 420px;
+          perspective: 1000px;
         }
 
         .wheel {
@@ -306,11 +366,24 @@ const SpinningWheel = ({
           width: 100%;
           height: 100%;
           border-radius: 50%;
-          overflow: hidden;
+          transform-style: preserve-3d;
           box-shadow: 
-            0 0 0 10px #2a2a4e,
-            0 0 0 15px #d4af37,
-            0 10px 50px rgba(0, 0, 0, 0.7);
+            0 0 0 12px #1a0a2e,
+            0 0 0 18px #fbbf24,
+            0 0 0 20px #1a0a2e,
+            0 30px 80px rgba(0, 0, 0, 0.9),
+            inset 0 0 40px rgba(0, 0, 0, 0.6);
+        }
+
+        .rim-tick {
+          position: absolute;
+          top: 0;
+          left: 50%;
+          width: 3px;
+          height: 15px;
+          background: linear-gradient(180deg, #fbbf24 0%, transparent 100%);
+          transform-origin: 50% 210px;
+          border-radius: 2px;
         }
 
         .wheel-segment {
@@ -320,37 +393,53 @@ const SpinningWheel = ({
           top: 50%;
           left: 50%;
           transform-origin: 0% 0%;
-          background: var(--segment-color);
           clip-path: polygon(0 0, 100% 0, 0 100%);
           display: flex;
           align-items: center;
           justify-content: center;
-          transition: opacity 0.3s;
+          border-left: 1px solid rgba(255, 255, 255, 0.1);
+          transition: all 0.3s ease;
         }
 
         .wheel-segment.completed {
-          opacity: 0.4;
-          background: #4a5568 !important;
+          opacity: 0.5;
+          filter: grayscale(0.8);
+        }
+
+        .wheel-segment::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(135deg, 
+            rgba(255, 255, 255, 0.2) 0%, 
+            transparent 50%,
+            rgba(0, 0, 0, 0.2) 100%
+          );
+          clip-path: polygon(0 0, 100% 0, 0 100%);
         }
 
         .segment-content {
           position: absolute;
-          top: 20%;
-          left: 20%;
+          top: 25%;
+          left: 25%;
           transform: rotate(${-segmentAngle / 2}deg);
           transform-origin: center;
-          width: 80px;
+          width: 120px;
+          text-align: center;
         }
 
         .segment-text {
           display: block;
           color: white;
-          font-weight: bold;
-          font-size: 0.9rem;
-          text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+          font-weight: 800;
+          font-size: 1rem;
+          text-shadow: 
+            0 2px 4px rgba(0, 0, 0, 0.9),
+            0 0 8px rgba(0, 0, 0, 0.5);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+          letter-spacing: 0.5px;
         }
 
         .wheel-center {
@@ -358,15 +447,22 @@ const SpinningWheel = ({
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%);
-          width: 80px;
-          height: 80px;
-          background: radial-gradient(circle, #1a1a2e 0%, #2a2a4e 100%);
+          width: 100px;
+          height: 100px;
           border-radius: 50%;
-          border: 5px solid #d4af37;
+          z-index: 200;
+        }
+
+        .center-ring {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(135deg, #1a0a2e 0%, #2a1a4e 100%);
+          border-radius: 50%;
+          border: 6px solid #fbbf24;
           box-shadow: 
-            inset 0 0 20px rgba(0, 0, 0, 0.5),
-            0 0 20px rgba(212, 175, 55, 0.5);
-          z-index: 5;
+            0 0 20px rgba(251, 191, 36, 0.6),
+            inset 0 0 20px rgba(0, 0, 0, 0.8),
+            inset 0 4px 8px rgba(255, 255, 255, 0.1);
         }
 
         .center-dot {
@@ -374,11 +470,37 @@ const SpinningWheel = ({
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%);
-          width: 20px;
-          height: 20px;
-          background: #d4af37;
+          width: 35px;
+          height: 35px;
+          background: radial-gradient(circle, #fcd34d 0%, #fbbf24 100%);
           border-radius: 50%;
-          box-shadow: 0 0 10px rgba(212, 175, 55, 0.8);
+          box-shadow: 
+            0 0 15px rgba(251, 191, 36, 0.8),
+            inset 0 2px 4px rgba(255, 255, 255, 0.4);
+          animation: centerPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes centerPulse {
+          0%, 100% { transform: translate(-50%, -50%) scale(1); }
+          50% { transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        .center-glow {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 120px;
+          height: 120px;
+          background: radial-gradient(circle, rgba(251, 191, 36, 0.3) 0%, transparent 70%);
+          border-radius: 50%;
+          animation: glowPulse 2s ease-in-out infinite;
+          pointer-events: none;
+        }
+
+        @keyframes glowPulse {
+          0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+          50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
         }
 
         .wheel-controls {
@@ -388,99 +510,125 @@ const SpinningWheel = ({
         }
 
         .spin-button {
-          padding: 1rem 2rem;
-          font-size: 1.1rem;
-          font-weight: bold;
-          color: #1a1a2e;
-          background: linear-gradient(135deg, #d4af37 0%, #f4d03f 100%);
+          padding: 1.2rem 2.5rem;
+          font-size: 1.2rem;
+          font-weight: 800;
+          color: #1a0a2e;
+          background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
           border: none;
           border-radius: 50px;
           cursor: pointer;
-          transition: all 0.3s;
-          box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
+          transition: all 0.3s ease;
+          box-shadow: 
+            0 6px 20px rgba(251, 191, 36, 0.5),
+            inset 0 -2px 4px rgba(0, 0, 0, 0.2),
+            inset 0 2px 4px rgba(255, 255, 255, 0.5);
           display: flex;
           align-items: center;
-          gap: 0.5rem;
+          gap: 0.7rem;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
         }
 
         .spin-button:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(212, 175, 55, 0.6);
+          transform: translateY(-3px);
+          box-shadow: 
+            0 8px 30px rgba(251, 191, 36, 0.7),
+            inset 0 -2px 4px rgba(0, 0, 0, 0.2),
+            inset 0 2px 4px rgba(255, 255, 255, 0.5);
+        }
+
+        .spin-button:active:not(:disabled) {
+          transform: translateY(-1px);
         }
 
         .spin-button:disabled {
           opacity: 0.5;
           cursor: not-allowed;
-          background: #4a5568;
+          background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
         }
 
         .spin-button .spin-icon {
-          font-size: 1.5rem;
-          animation: pulse 2s infinite;
+          font-size: 1.8rem;
+          animation: iconBounce 2s infinite;
         }
 
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.2); }
+        @keyframes iconBounce {
+          0%, 100% { transform: scale(1) rotate(0deg); }
+          25% { transform: scale(1.2) rotate(10deg); }
+          75% { transform: scale(1.2) rotate(-10deg); }
         }
 
         .spinner {
-          width: 20px;
-          height: 20px;
-          border: 3px solid rgba(0, 0, 0, 0.3);
-          border-top-color: #1a1a2e;
+          width: 24px;
+          height: 24px;
+          border: 4px solid rgba(26, 10, 46, 0.3);
+          border-top-color: #1a0a2e;
           border-radius: 50%;
-          animation: spin 1s linear infinite;
+          animation: buttonSpin 1s linear infinite;
         }
 
-        @keyframes spin {
+        @keyframes buttonSpin {
           to { transform: rotate(360deg); }
         }
 
         .selected-player {
           width: 100%;
-          animation: fadeInUp 0.5s;
+          animation: fadeInScale 0.6s ease-out;
         }
 
-        @keyframes fadeInUp {
+        @keyframes fadeInScale {
           from {
             opacity: 0;
-            transform: translateY(20px);
+            transform: scale(0.8);
           }
           to {
             opacity: 1;
-            transform: translateY(0);
+            transform: scale(1);
           }
         }
 
         .selected-badge {
           display: flex;
           align-items: center;
-          gap: 1rem;
-          padding: 1.5rem;
-          background: linear-gradient(135deg, #2a2a4e 0%, #1a1a2e 100%);
-          border: 2px solid #d4af37;
-          border-radius: 1rem;
-          box-shadow: 0 4px 20px rgba(212, 175, 55, 0.3);
+          gap: 1.5rem;
+          padding: 2rem;
+          background: linear-gradient(135deg, #1a0a2e 0%, #2a1a4e 100%);
+          border: 3px solid #fbbf24;
+          border-radius: 1.5rem;
+          box-shadow: 
+            0 10px 40px rgba(251, 191, 36, 0.4),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
         }
 
         .badge-icon {
-          font-size: 2rem;
-          filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.5));
+          font-size: 3rem;
+          filter: drop-shadow(0 0 15px rgba(251, 191, 36, 0.6));
+          animation: badgePulse 2s infinite;
+        }
+
+        @keyframes badgePulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.2); }
         }
 
         @media (max-width: 640px) {
           .wheel-wrapper {
+            width: 320px;
+            height: 320px;
+          }
+
+          .wheel-scene {
             width: 300px;
             height: 300px;
           }
 
           .segment-text {
-            font-size: 0.7rem;
+            font-size: 0.8rem;
           }
 
           .spin-button {
-            padding: 0.75rem 1.5rem;
+            padding: 1rem 2rem;
             font-size: 1rem;
           }
         }
