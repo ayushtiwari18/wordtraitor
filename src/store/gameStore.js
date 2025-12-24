@@ -650,6 +650,11 @@ const useGameStore = create((set, get) => ({
     const { gamePhase, hints, votes, participants } = get()
     const alivePlayers = participants.filter(p => p.is_alive)
     
+    // ✅ NEW FIX: DEBATE phase should NEVER auto-advance early
+    if (gamePhase === 'DEBATE') {
+      return false // Always wait for full timer
+    }
+    
     if (gamePhase === 'HINT_DROP') {
       const allHintsSubmitted = hints.length >= alivePlayers.length
       if (allHintsSubmitted) {
