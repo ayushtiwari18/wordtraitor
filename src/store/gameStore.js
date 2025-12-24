@@ -570,18 +570,25 @@ const useGameStore = create((set, get) => ({
         timeLeft -= 1
         set({ phaseTimer: timeLeft })
         
-        // ✅ BUG FIX #9: Re-fetch current phase to prevent stale checks
+        // 🔍 DEBUG: Log every tick for DEBATE phase
         const currentPhase = get().gamePhase
+        if (phaseName === 'DEBATE' || currentPhase === 'DEBATE') {
+          console.log(`🔍 DEBUG [DEBATE Interval]: phaseName=${phaseName}, currentPhase=${currentPhase}, timeLeft=${timeLeft}`)
+        }
+        
+        // ✅ BUG FIX #9: Re-fetch current phase to prevent stale checks
         
         // ✅ BUG FIX #9: Only check early completion if we're STILL in the same phase
         if (currentPhase === phaseName && get().canAdvancePhaseEarly()) {
           clearInterval(interval)
           set({ phaseInterval: null })
           console.log(`⚡ ${phaseName} complete early! All players submitted.`)
+          console.log(`🔍 DEBUG: Early completion triggered - phaseName=${phaseName}, currentPhase=${currentPhase}`)
           
           const { isHost } = get()
           if (isHost) {
             console.log('🎯 Host triggering early phase advance...')
+            console.log(`🔍 DEBUG: Calling advancePhase() from early completion - source: syncPhaseTimer interval`)
             ;(async () => {
               try {
                 await get().advancePhase()
@@ -609,6 +616,7 @@ const useGameStore = create((set, get) => ({
           const { isHost } = get()
           if (isHost) {
             console.log('🎯 Host triggering phase advance...')
+            console.log(`🔍 DEBUG: Calling advancePhase() from timer expiry - source: syncPhaseTimer interval, phase: ${phaseName}`)
             ;(async () => {
               try {
                 await get().advancePhase()
@@ -649,6 +657,7 @@ const useGameStore = create((set, get) => ({
         }
       }, 1000)
       
+      console.log(`🔍 DEBUG: Created interval for ${phaseName}, ID:`, interval)
       set({ phaseInterval: interval })
     }
   },
@@ -667,8 +676,11 @@ const useGameStore = create((set, get) => ({
     const { gamePhase, hints, votes, participants } = get()
     const alivePlayers = participants.filter(p => p.is_alive)
     
+    console.log(`🔍 DEBUG [canAdvancePhaseEarly]: gamePhase=${gamePhase}, hints=${hints.length}, votes=${votes.length}, alive=${alivePlayers.length}`)
+    
     // ✅ NEW FIX: DEBATE phase should NEVER auto-advance early
     if (gamePhase === 'DEBATE') {
+      console.log(`🔍 DEBUG: DEBATE phase - returning FALSE (never auto-advance)`)
       return false // Always wait for full timer
     }
     
@@ -676,6 +688,7 @@ const useGameStore = create((set, get) => ({
       const allHintsSubmitted = hints.length >= alivePlayers.length
       if (allHintsSubmitted) {
         console.log(`✅ All ${alivePlayers.length} players submitted hints (${hints.length} total)`)
+        console.log(`🔍 DEBUG: HINT_DROP complete - returning TRUE`)
         return true
       }
     }
@@ -684,10 +697,12 @@ const useGameStore = create((set, get) => ({
       const allVotesSubmitted = votes.length >= alivePlayers.length
       if (allVotesSubmitted) {
         console.log(`✅ All ${alivePlayers.length} players voted (${votes.length} total)`)
+        console.log(`🔍 DEBUG: VERDICT complete - returning TRUE`)
         return true
       }
     }
     
+    console.log(`🔍 DEBUG: No early completion - returning FALSE`)
     return false
   },
 
@@ -698,6 +713,7 @@ const useGameStore = create((set, get) => ({
     
     const duration = get().getPhaseDuration(phaseName)
     console.log(`⏰ Starting ${phaseName} phase (${duration}s)`)
+    console.log(`🔍 DEBUG: startPhaseTimer called for ${phaseName}`)
     
     // ✅ BUG FIX #9: Clear interval BEFORE setting gamePhase to prevent stale interval checks
     const { phaseInterval } = get()
@@ -714,18 +730,25 @@ const useGameStore = create((set, get) => ({
       timeLeft -= 1
       set({ phaseTimer: timeLeft })
       
-      // ✅ BUG FIX #9: Re-fetch current phase to prevent stale checks
+      // 🔍 DEBUG: Log every tick for DEBATE phase
       const currentPhase = get().gamePhase
+      if (phaseName === 'DEBATE' || currentPhase === 'DEBATE') {
+        console.log(`🔍 DEBUG [DEBATE Interval]: phaseName=${phaseName}, currentPhase=${currentPhase}, timeLeft=${timeLeft}`)
+      }
+      
+      // ✅ BUG FIX #9: Re-fetch current phase to prevent stale checks
       
       // ✅ BUG FIX #9: Only check early completion if we're STILL in the same phase
       if (currentPhase === phaseName && get().canAdvancePhaseEarly()) {
         clearInterval(interval)
         set({ phaseInterval: null })
         console.log(`⚡ ${phaseName} complete early! All players submitted.`)
+        console.log(`🔍 DEBUG: Early completion triggered - phaseName=${phaseName}, currentPhase=${currentPhase}`)
         
         const { isHost } = get()
         if (isHost) {
           console.log('🎯 Host triggering early phase advance...')
+          console.log(`🔍 DEBUG: Calling advancePhase() from early completion - source: startPhaseTimer interval`)
           ;(async () => {
             try {
               await get().advancePhase()
@@ -753,6 +776,7 @@ const useGameStore = create((set, get) => ({
         const { isHost } = get()
         if (isHost) {
           console.log('🎯 Host triggering phase advance...')
+          console.log(`🔍 DEBUG: Calling advancePhase() from timer expiry - source: startPhaseTimer interval, phase: ${phaseName}`)
           ;(async () => {
             try {
               await get().advancePhase()
@@ -793,6 +817,7 @@ const useGameStore = create((set, get) => ({
       }
     }, 1000)
     
+    console.log(`🔍 DEBUG: Created interval for ${phaseName}, ID:`, interval)
     set({ phaseInterval: interval })
   },
 
@@ -810,6 +835,9 @@ const useGameStore = create((set, get) => ({
 
   advancePhase: async () => {
     const { gamePhase, roomId, isHost } = get()
+    
+    console.log(`🔍 DEBUG [advancePhase]: Called with gamePhase=${gamePhase}, isHost=${isHost}`)
+    console.trace('🔍 STACK TRACE for advancePhase call:')
     
     if (!isHost) {
       console.log('⏭️ Not host, skipping phase advance')
@@ -1195,13 +1223,16 @@ const useGameStore = create((set, get) => ({
           
           if (updatedRoom.current_phase && updatedRoom.current_phase !== get().gamePhase) {
             console.log(`🔄 Phase changed to ${updatedRoom.current_phase} via realtime`)
+            console.log(`🔍 DEBUG: onRoomUpdate setting gamePhase to ${updatedRoom.current_phase}`)
             set({ gamePhase: updatedRoom.current_phase })
             
             if (updatedRoom.phase_started_at) {
+              console.log(`🔍 DEBUG: Calling syncPhaseTimer(${updatedRoom.current_phase}) from onRoomUpdate`)
               get().syncPhaseTimer(updatedRoom.current_phase, updatedRoom.phase_started_at)
             }
             
             if (updatedRoom.current_phase === 'DEBATE') {
+              console.log(`🔍 DEBUG: Loading hints and chat for DEBATE phase`)
               get().loadHints()
               get().loadChatMessages()
             } else if (updatedRoom.current_phase === 'REVEAL') {
