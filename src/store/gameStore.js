@@ -813,7 +813,7 @@ const useGameStore = create((set, get) => ({
   getCurrentTurnPlayer: () => {
     const { turnOrder, hints, participants } = get()
     
-    // ✅ FIX #3: Auto-sync if turnOrder is empty
+    // ✅ FIX #3: Auto-sync if turnOrder is empty (but don't call set() here!)
     if (!turnOrder || turnOrder.length === 0) {
       console.log('🚨 Turn order is empty! Attempting auto-sync...')
       
@@ -822,7 +822,10 @@ const useGameStore = create((set, get) => ({
       const now = Date.now()
       
       if (now - lastSyncAttempt > 5000) {
-        set({ lastSyncAttempt: now })
+        // ✅ BUG FIX #7: Use getState() instead of set() to avoid setState during render
+        const state = useGameStore.getState()
+        state.lastSyncAttempt = now
+        
         console.log('🔄 Triggering syncGameStartWithRetry()...')
         
         setTimeout(async () => {
@@ -1180,22 +1183,23 @@ const useGameStore = create((set, get) => ({
       },
       
       onParticipantUpdate: async (payload) => {
-        // ✅ BUG FIX #6: Fixed heartbeat filter - removed 'role' check (doesn't exist in room_participants!)
+        // ✅ BUG FIX #7: Fixed heartbeat filter - check if ONLY last_seen changed
         if (payload.eventType === 'UPDATE') {
           const oldData = payload.old || {}
           const newData = payload.new || {}
           
-          // Check ONLY fields that exist and matter in room_participants table
-          const meaningfulFieldsChanged = 
-            oldData.is_alive !== newData.is_alive ||
-            oldData.username !== newData.username ||
-            oldData.user_id !== newData.user_id
+          // Get all changed fields
+          const changedFields = Object.keys(newData).filter(
+            key => oldData[key] !== newData[key]
+          )
           
-          if (!meaningfulFieldsChanged) {
-            // Skip UI update for heartbeat-only changes
+          // If ONLY last_seen changed, skip update
+          if (changedFields.length === 1 && changedFields[0] === 'last_seen') {
+            // Silent heartbeat update - no UI re-render needed
             return
           }
           
+          // If other fields changed (is_alive, username, etc.), log and update
           console.log('👥 Participants updated (meaningful change)')
         } else {
           console.log('👥 Participants updated (INSERT/DELETE)')
@@ -1258,6 +1262,10 @@ const useGameStore = create((set, get) => ({
     }
     
     try {
+      // ✅ BUG FIX #8: Fetch room to get current phase (don't hardcode WHISPER!)
+      const room = await gameHelpers.getRoom(roomId)
+      const currentPhase = room.current_phase || 'WHISPER'
+      
       const mySecret = await get().getMySecretWithRetry(roomId, myUserId)
       
       console.log('📝 Synced - My role:', mySecret.role, '| Word:', mySecret.secret_word)
@@ -1267,16 +1275,15 @@ const useGameStore = create((set, get) => ({
       
       set({ 
         mySecret,
-        gamePhase: 'WHISPER',
+        gamePhase: currentPhase,  // ✅ BUG FIX #8: Use actual phase from DB
         turnOrder,
         currentTurnIndex: 0
       })
       
-      const room = get().room
-      if (room?.phase_started_at) {
-        get().syncPhaseTimer('WHISPER', room.phase_started_at)
+      if (room.phase_started_at) {
+        get().syncPhaseTimer(currentPhase, room.phase_started_at)
       } else {
-        get().startPhaseTimer('WHISPER')
+        get().startPhaseTimer(currentPhase)
       }
       
     } catch (error) {

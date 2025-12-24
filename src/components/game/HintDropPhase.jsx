@@ -19,7 +19,6 @@ const HintDropPhase = () => {
   const submitRealModeNext = useGameStore(state => state.submitRealModeNext)
   const loadHints = useGameStore(state => state.loadHints)
   const getAliveParticipants = useGameStore(state => state.getAliveParticipants)
-  const getCurrentTurnPlayer = useGameStore(state => state.getCurrentTurnPlayer)
   
   const [hintText, setHintText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -27,6 +26,7 @@ const HintDropPhase = () => {
   const [isSpinning, setIsSpinning] = useState(false)
   const [completedPlayerIds, setCompletedPlayerIds] = useState([])
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
+  const [currentPlayer, setCurrentPlayer] = useState(null)  // ✅ BUG FIX #7: Local state instead of derived
 
   // Load hints when component mounts
   useEffect(() => {
@@ -51,6 +51,19 @@ const HintDropPhase = () => {
       })()
     }
   }, [turnOrder])
+
+  // ✅ BUG FIX #7: Move getCurrentTurnPlayer to useEffect (no setState during render)
+  useEffect(() => {
+    if (!turnOrder || turnOrder.length === 0) {
+      setCurrentPlayer(null)
+      return
+    }
+    
+    const currentTurnIndex = hints.length % turnOrder.length
+    const currentUserId = turnOrder[currentTurnIndex]
+    const player = participants.find(p => p.user_id === currentUserId)
+    setCurrentPlayer(player || null)
+  }, [turnOrder, hints.length, participants])
 
   useEffect(() => {
     const myHint = hints.find(h => h.user_id === myUserId)
@@ -168,11 +181,6 @@ const HintDropPhase = () => {
   const isMyTurn = useMemo(
     () => currentUserId === myUserId,
     [currentUserId, myUserId]
-  )
-  
-  const currentPlayer = useMemo(
-    () => getCurrentTurnPlayer(),
-    [participants, turnOrder, hints.length]
   )
 
   return (
