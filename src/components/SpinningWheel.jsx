@@ -253,8 +253,8 @@ const SpinningWheel = ({
         </div>
       )}
 
-      {/* Styles */}
-      <style jsx>{`
+      {/* 🔧 CYCLE 3 FIX: Changed <style jsx> to <style> (removes React warning) */}
+      <style>{`
         .spinning-wheel-container {
           display: flex;
           flex-direction: column;
