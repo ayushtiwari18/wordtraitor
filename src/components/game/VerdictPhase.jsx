@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
 
@@ -100,6 +100,19 @@ const VerdictPhase = () => {
     voteTally[vote.target_id] = (voteTally[vote.target_id] || 0) + 1
   })
 
+  // NEW: Timer urgency color
+  const timerColor = useMemo(() => {
+    if (phaseTimer > 20) return 'text-purple-400'
+    if (phaseTimer > 10) return 'text-yellow-400 animate-pulse'
+    return 'text-red-400 animate-pulse'
+  }, [phaseTimer])
+
+  // NEW: Get selected player name for button
+  const selectedPlayerName = useMemo(() => {
+    const player = alivePlayers.find(p => p.user_id === selectedPlayer)
+    return player?.username || 'Player'
+  }, [selectedPlayer, alivePlayers])
+
   // Check if I'm eliminated (can't vote)
   if (!myPlayer || !myPlayer.is_alive) {
     return (
@@ -115,7 +128,7 @@ const VerdictPhase = () => {
           
           {/* ✅ BUG FIX #6: Only show timer in SILENT mode or if timer is running */}
           {(room?.game_mode === 'SILENT' || phaseTimer > 0) && (
-            <div data-testid="phase-timer" className="mt-6 text-4xl font-bold text-purple-400">{phaseTimer}s</div>
+            <div data-testid="phase-timer" className={`mt-6 text-4xl font-bold ${timerColor}`}>{phaseTimer}s</div>
           )}
           
           {/* Show all-voted message even for eliminated players */}
@@ -136,20 +149,21 @@ const VerdictPhase = () => {
 
   return (
     <div className="max-w-4xl mx-auto p-6" data-testid="verdict-phase-container">
-      {/* Header */}
+      {/* Header - ENHANCED */}
       <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-white mb-2">⚖️ Cast Your Vote</h2>
-        <p className="text-gray-400">Who do you think is the traitor?</p>
+        <h2 className="text-3xl font-bold text-white mb-2">⚖️ The Moment of Truth</h2>
+        <p className="text-gray-400 mb-1">Choose wisely. One will fall.</p>
+        <p className="text-sm text-gray-500">Trust your instincts. Doubt everyone.</p>
         <div className="mt-4 flex items-center justify-center gap-2">
           {/* ✅ BUG FIX #6: Only show timer in SILENT mode or if timer is running */}
           {(room?.game_mode === 'SILENT' || phaseTimer > 0) && (
             <>
-              <div data-testid="phase-timer" className="text-2xl font-bold text-red-400">{phaseTimer}s</div>
+              <div data-testid="phase-timer" className={`text-2xl font-bold ${timerColor}`}>{phaseTimer}s</div>
               <div className="text-gray-400">|</div>
             </>
           )}
           <div data-testid="vote-progress" className="text-sm text-gray-400">
-            {voteCount}/{totalVoters} votes cast
+            {voteCount}/{totalVoters} verdicts cast
           </div>
         </div>
       </div>
@@ -162,9 +176,9 @@ const VerdictPhase = () => {
           className="mb-8 bg-green-500/20 border-2 border-green-500 rounded-xl p-6 text-center"
         >
           <div className="text-4xl mb-2">✅</div>
-          <p className="text-green-400 font-bold text-xl">All votes in!</p>
+          <p className="text-green-400 font-bold text-xl">All verdicts in!</p>
           {/* ✅ BUG FIX #3: Show countdown so users know it's intentional delay */}
-          <p className="text-gray-300 mt-2">Revealing results in {countdown}s...</p>
+          <p className="text-gray-300 mt-2">Revealing the accused in {countdown}s...</p>
         </motion.div>
       )}
 
@@ -177,12 +191,13 @@ const VerdictPhase = () => {
           className="mb-8 bg-green-500/20 border-2 border-green-500 rounded-xl p-6 text-center"
         >
           <div className="text-4xl mb-2">✓</div>
-          <p className="text-green-400 font-semibold">Vote cast!</p>
-          <p className="text-gray-400 text-sm mt-2">Waiting for other players...</p>
+          <p className="text-green-400 font-semibold">Verdict cast!</p>
+          <p className="text-gray-400 text-sm mt-2">Waiting for others to decide...</p>
+          <p className="text-xs text-gray-500 mt-1">The fate is sealed. 🔒</p>
         </motion.div>
       )}
 
-      {/* Player Selection */}
+      {/* Player Selection - ENHANCED */}
       {!hasVoted && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -203,12 +218,14 @@ const VerdictPhase = () => {
                   disabled={hasVoted}
                   className={`p-6 rounded-xl border-2 transition-all ${
                     selectedPlayer === player.user_id
-                      ? 'bg-red-500/20 border-red-500 ring-2 ring-red-500'
-                      : 'bg-gray-800 border-gray-700 hover:border-red-400'
+                      ? 'bg-red-500/20 border-red-500 ring-2 ring-red-500 glow-red-sm'
+                      : 'bg-gray-800 border-gray-700 hover:border-red-400 hover:glow-red-sm'
                   } ${hasVoted ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <div className="flex flex-col items-center">
-                    <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center text-2xl mb-3">
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl mb-3 ${
+                      selectedPlayer === player.user_id ? 'bg-red-500/30' : 'bg-gray-700'
+                    }`}>
                       {player.username?.charAt(0).toUpperCase() || '?'}
                     </div>
                     <p className="text-white font-semibold text-center">
@@ -218,9 +235,9 @@ const VerdictPhase = () => {
                       <motion.div
                         initial={{ opacity: 0, scale: 0 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="mt-2 text-red-400"
+                        className="mt-2 text-red-400 font-bold"
                       >
-                        ✓ Selected
+                        🎯 Accuse
                       </motion.div>
                     )}
                   </div>
@@ -229,15 +246,21 @@ const VerdictPhase = () => {
             </AnimatePresence>
           </div>
 
-          {/* Confirm Button */}
+          {/* Confirm Button - ENHANCED */}
           <div className="mt-8 flex justify-center">
             <button
               onClick={handleVote}
               disabled={!selectedPlayer || isSubmitting || hasVoted}
               data-testid="confirm-vote-button"
-              className="px-8 py-4 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-xl font-bold text-white text-lg transition-colors shadow-lg"
+              className="px-8 py-4 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-xl font-bold text-white text-lg transition-colors shadow-lg glow-red-sm"
             >
-              {isSubmitting ? 'Voting...' : 'Confirm Vote'}
+              {isSubmitting ? (
+                <span>📤 Casting Verdict...</span>
+              ) : selectedPlayer ? (
+                <span>🎯 Eliminate {selectedPlayerName}</span>
+              ) : (
+                <span>⏳ Choose a Suspect</span>
+              )}
             </button>
           </div>
         </motion.div>
@@ -273,7 +296,7 @@ const VerdictPhase = () => {
         </motion.div>
       )}
 
-      {/* Warning */}
+      {/* Warning - ENHANCED */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -282,7 +305,10 @@ const VerdictPhase = () => {
       >
         <p className="text-yellow-400 font-semibold">⚠️ Think carefully!</p>
         <p className="text-gray-400 text-sm mt-1">
-          The player with the most votes will be eliminated
+          The accused will be revealed. Their word will be exposed.
+        </p>
+        <p className="text-xs text-gray-500 mt-2">
+          Are you voting for the right person? 🤔
         </p>
       </motion.div>
     </div>
