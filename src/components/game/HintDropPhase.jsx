@@ -15,9 +15,9 @@ const HintDropPhase = () => {
     phaseTimer,
     getAliveParticipants,
     getCurrentTurnPlayer,
-    isMyTurnToHint,
     loadHints,
-    isHost
+    isHost,
+    turnOrder  // 🔧 CYCLE 3 FIX: Get turnOrder directly
   } = useGameStore()
   
   const [hintText, setHintText] = useState('')
@@ -33,25 +33,25 @@ const HintDropPhase = () => {
     loadHints()
   }, [])
 
-  // 🔧 CYCLE 1 FIX: Check turnOrder in useEffect (not during render)
+  // 🔧 CYCLE 3 FIX: Validate turnOrder in separate useEffect (not during render)
   useEffect(() => {
-    const { turnOrder, gamePhase, syncGameStartWithRetry } = useGameStore.getState()
+    const { gamePhase, syncGameStartWithRetry } = useGameStore.getState()
     
     // Only sync if we're in HINT_DROP and turnOrder is empty
     if (gamePhase === 'HINT_DROP' && (!turnOrder || turnOrder.length === 0)) {
       console.log('⚠️ Turn order empty in HINT_DROP, auto-syncing...')
       
-      // Use setTimeout to avoid updating during render
-      setTimeout(async () => {
+      // Use async IIFE to avoid returning Promise from useEffect
+      ;(async () => {
         try {
           await syncGameStartWithRetry()
           console.log('✅ Turn order sync completed')
         } catch (error) {
           console.error('❌ Turn order sync failed:', error)
         }
-      }, 100)
+      })()
     }
-  }, []) // Run once on mount
+  }, [turnOrder]) // Re-run if turnOrder changes
 
   useEffect(() => {
     // Check if I've already submitted
@@ -120,7 +120,11 @@ const HintDropPhase = () => {
   const totalCount = alivePlayers.length
   const isSilentMode = room?.game_mode === 'SILENT'
   const isRealMode = room?.game_mode === 'REAL'
-  const isMyTurn = isMyTurnToHint()
+  
+  // 🔧 CYCLE 3 FIX: Calculate isMyTurn directly without calling state-updating function
+  const currentTurnIndex = hints.length % (turnOrder?.length || 1)
+  const currentUserId = turnOrder?.[currentTurnIndex]
+  const isMyTurn = currentUserId === myUserId
   const currentPlayer = getCurrentTurnPlayer()
 
   return (
