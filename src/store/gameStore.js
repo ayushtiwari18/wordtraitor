@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { supabase, gameHelpers, realtimeHelpers } from '../lib/supabase'
 
+
 // Default game phases with durations (in seconds)
 export const DEFAULT_PHASE_DURATIONS = {
   WHISPER: 30,
@@ -10,6 +11,7 @@ export const DEFAULT_PHASE_DURATIONS = {
   REVEAL: 15
 }
 
+
 export const GAME_PHASES = {
   WHISPER: { name: 'WHISPER', next: 'HINT_DROP' },
   HINT_DROP: { name: 'HINT_DROP', next: 'DEBATE' },
@@ -17,6 +19,7 @@ export const GAME_PHASES = {
   VERDICT: { name: 'VERDICT', next: 'REVEAL' },
   REVEAL: { name: 'REVEAL', next: null }
 }
+
 
 const useGameStore = create((set, get) => ({
   // Room state
@@ -27,6 +30,7 @@ const useGameStore = create((set, get) => ({
   myUsername: null,
   guestUsername: localStorage.getItem('username') || '',
   isHost: false,
+
 
   // Game state
   gamePhase: null,
@@ -71,8 +75,10 @@ const useGameStore = create((set, get) => ({
   gameResults: null,
   syncRetryCount: 0,
 
+
   // Track pending loadRoom calls
   pendingRoomLoad: null,
+
 
   // ==========================================
   // INITIALIZATION
@@ -85,12 +91,14 @@ const useGameStore = create((set, get) => ({
     console.log('📝 Username updated:', trimmed)
   },
 
+
   initializeGuest: () => {
     const { myUserId, myUsername } = get()
     if (myUserId && myUsername) {
       console.log('✅ Guest already initialized:', myUsername, `(${myUserId.slice(0, 20)}...)`)
       return { guestId: myUserId, guestUsername: myUsername }
     }
+
 
     let guestId = localStorage.getItem('guest_id')
     let guestUsername = localStorage.getItem('username')
@@ -112,6 +120,7 @@ const useGameStore = create((set, get) => ({
     console.log('👤 Guest initialized:', guestUsername, `(${guestId.slice(0, 20)}...)`)
     return { guestId, guestUsername }
   },
+
 
   // ==========================================
   // ✅ FIX #5: HEARTBEAT SYSTEM
@@ -168,6 +177,7 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+
   // ==========================================
   // ROOM MANAGEMENT
   // ==========================================
@@ -213,6 +223,7 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+
   joinRoom: async (roomCode) => {
     console.log('🚺 Joining room:', roomCode)
     set({ isLoading: true, error: null })
@@ -253,6 +264,7 @@ const useGameStore = create((set, get) => ({
       throw error
     }
   },
+
 
   loadRoom: async (roomIdOrCode, options = {}) => {
     const { force = false } = options
@@ -392,6 +404,7 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+
   leaveRoom: async () => {
     const { roomId, myUserId, realtimeChannel, phaseInterval } = get()
     console.log('👋 Leaving room...')
@@ -449,6 +462,7 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+
   // ==========================================
   // GAME FLOW (SERVER-AUTHORITATIVE)
   // ==========================================
@@ -498,6 +512,7 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+
   getMySecretWithRetry: async (roomId, userId, maxRetries = 5) => {
     const delays = [500, 1000, 2000, 3000, 4000]
     
@@ -525,6 +540,7 @@ const useGameStore = create((set, get) => ({
     
     throw new Error('Failed to retrieve secret after multiple retries')
   },
+
 
   syncPhaseTimer: (phaseName, phaseStartedAt) => {
     const phase = GAME_PHASES[phaseName]
@@ -593,6 +609,7 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+
   getPhaseDuration: (phaseName) => {
     const { customTimings } = get()
     if (customTimings && customTimings[phaseName]) {
@@ -600,6 +617,7 @@ const useGameStore = create((set, get) => ({
     }
     return DEFAULT_PHASE_DURATIONS[phaseName] || 30
   },
+
 
   canAdvancePhaseEarly: () => {
     const { gamePhase, hints, votes, participants } = get()
@@ -623,6 +641,7 @@ const useGameStore = create((set, get) => ({
     
     return false
   },
+
 
   startPhaseTimer: (phaseName) => {
     const phase = GAME_PHASES[phaseName]
@@ -673,16 +692,17 @@ const useGameStore = create((set, get) => ({
               await get().advancePhase()
             } catch (error) {
               console.error('❌ Error auto-advancing phase:', error)
-            })()
-          } else {
-            console.log('⏳ Waiting for host to advance phase...')
-          }
+            }
+          })()
+        } else {
+          console.log('⏳ Waiting for host to advance phase...')
         }
       }
     }, 1000)
     
     set({ phaseInterval: interval })
   },
+
 
   // ✅ BUG FIX #6: Expose stopPhaseTimer for REAL mode early completion
   stopPhaseTimer: () => {
@@ -693,6 +713,7 @@ const useGameStore = create((set, get) => ({
       console.log('⏸️ Phase timer stopped manually')
     }
   },
+
 
   advancePhase: async () => {
     const { gamePhase, roomId, isHost } = get()
@@ -715,6 +736,7 @@ const useGameStore = create((set, get) => ({
     await gameHelpers.advancePhase(roomId, currentPhase.next)
   },
 
+
   skipPhase: async () => {
     const { phaseInterval } = get()
     if (phaseInterval) {
@@ -723,6 +745,7 @@ const useGameStore = create((set, get) => ({
     }
     await get().advancePhase()
   },
+
 
   // ==========================================
   // TURN-BASED HINTS (SERVER-AUTHORITATIVE)
@@ -810,6 +833,7 @@ const useGameStore = create((set, get) => ({
     set({ currentTurnIndex: nextIndex })
   },
 
+
   // ==========================================
   // HINTS
   // ==========================================
@@ -846,6 +870,7 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+
   loadHints: async () => {
     // 🔧 CYCLE 2 FIX: Pass currentRound to eliminate N+1 query
     const { roomId, currentRound } = get()
@@ -858,6 +883,7 @@ const useGameStore = create((set, get) => ({
       console.error('❌ Error loading hints:', error)
     }
   },
+
 
   // ==========================================
   // CHAT MESSAGES
@@ -892,6 +918,7 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+
   // ==========================================
   // VOTING
   // ==========================================
@@ -912,6 +939,7 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+
   loadVotes: async () => {
     // 🔧 CYCLE 2 FIX: Pass currentRound to eliminate N+1 query
     const { roomId, currentRound } = get()
@@ -925,6 +953,7 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+
   // ==========================================
   // WIN CONDITIONS
   // ==========================================
@@ -937,6 +966,7 @@ const useGameStore = create((set, get) => ({
     try {
       const results = await gameHelpers.calculateVoteResults(roomId, currentRound)
       const { eliminatedId, voteCounts } = results
+
 
       console.log('📊 Vote counts:', voteCounts)
       
@@ -960,6 +990,7 @@ const useGameStore = create((set, get) => ({
       } else {
         console.log('🤝 Vote resulted in a tie - no elimination')
       }
+
 
       const gameEnd = await gameHelpers.checkGameEnd(roomId)
       
@@ -1001,6 +1032,7 @@ const useGameStore = create((set, get) => ({
       set({ error: error.message })
     }
   },
+
 
   // ==========================================
   // REAL-TIME SUBSCRIPTIONS
@@ -1155,6 +1187,7 @@ const useGameStore = create((set, get) => ({
     console.log('✅ Real-time subscribed and connected')
   },
 
+
   syncGameStartWithRetry: async () => {
     const { roomId, myUserId, participants } = get()
     console.log('🔄 Syncing game start with retry...')
@@ -1193,9 +1226,11 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+
   syncGameStart: async () => {
     await get().syncGameStartWithRetry()
   },
+
 
   // ==========================================
   // HELPERS
@@ -1205,6 +1240,7 @@ const useGameStore = create((set, get) => ({
     const { participants, myUserId } = get()
     return participants.find(p => p.user_id === myUserId)
   },
+
 
   isMyTurn: () => {
     const { gamePhase, myUserId, hints, votes } = get()
@@ -1220,12 +1256,15 @@ const useGameStore = create((set, get) => ({
     return false
   },
 
+
   getAliveParticipants: () => {
     const { participants } = get()
     return participants.filter(p => p.is_alive)
   },
 
+
   clearError: () => set({ error: null })
 }))
+
 
 export default useGameStore
