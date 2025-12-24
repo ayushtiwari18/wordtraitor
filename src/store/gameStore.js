@@ -25,7 +25,7 @@ const useGameStore = create((set, get) => ({
   participants: [],
   myUserId: null,
   myUsername: null,
-  guestUsername: localStorage.getItem('username') || '', // 🆕 ADDED for Home.jsx
+  guestUsername: localStorage.getItem('username') || '',
   isHost: false,
 
   // Game state
@@ -53,6 +53,10 @@ const useGameStore = create((set, get) => ({
   isConnected: false,
   subscriptionState: null,
   
+  // ✅ FIX #5: Heartbeat system
+  heartbeatInterval: null,
+  lastSyncAttempt: 0, // Rate limit auto-sync
+  
   // UI state
   isLoading: false,
   error: null,
@@ -67,7 +71,6 @@ const useGameStore = create((set, get) => ({
   // INITIALIZATION
   // ==========================================
   
-  // 🆕 ADDED: setGuestUsername for Home.jsx
   setGuestUsername: (username) => {
     const trimmed = username.trim()
     localStorage.setItem('username', trimmed)
@@ -90,7 +93,6 @@ const useGameStore = create((set, get) => ({
       console.log('🆕 Generated new guest ID')
     }
     
-    // 🆕 CHANGED: Only generate random username if none exists
     if (!guestUsername || guestUsername.trim() === '') {
       guestUsername = `Player${Math.floor(Math.random() * 9999)}`
       console.log('🆕 Generated new username (no custom username set)')
@@ -102,6 +104,61 @@ const useGameStore = create((set, get) => ({
     set({ myUserId: guestId, myUsername: guestUsername, guestUsername })
     console.log('👤 Guest initialized:', guestUsername, `(${guestId.slice(0, 20)}...)`)
     return { guestId, guestUsername }
+  },
+
+  // ==========================================
+  // ✅ FIX #5: HEARTBEAT SYSTEM
+  // ==========================================
+  
+  startHeartbeat: () => {
+    const { heartbeatInterval, roomId, myUserId } = get()
+    
+    // Clear existing heartbeat
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval)
+    }
+    
+    if (!roomId || !myUserId) {
+      console.log('⚠️ Cannot start heartbeat: missing roomId or userId')
+      return
+    }
+    
+    console.log('💓 Starting heartbeat system')
+    
+    // Send heartbeat every 5 seconds
+    const interval = setInterval(async () => {
+      try {
+        const { roomId: currentRoomId, myUserId: currentUserId } = get()
+        
+        if (!currentRoomId || !currentUserId) {
+          console.log('💔 Heartbeat stopped: no room or user')
+          clearInterval(interval)
+          return
+        }
+        
+        // Update last_seen timestamp
+        await supabase
+          .from('room_participants')
+          .update({ last_seen: new Date().toISOString() })
+          .eq('room_id', currentRoomId)
+          .eq('user_id', currentUserId)
+        
+        // console.log('💓 Heartbeat sent') // Too verbose, comment out
+      } catch (error) {
+        console.error('❌ Heartbeat error:', error)
+      }
+    }, 5000) // Every 5 seconds
+    
+    set({ heartbeatInterval: interval })
+  },
+  
+  stopHeartbeat: () => {
+    const { heartbeatInterval } = get()
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval)
+      set({ heartbeatInterval: null })
+      console.log('💔 Heartbeat stopped')
+    }
   },
 
   // ==========================================
@@ -137,6 +194,7 @@ const useGameStore = create((set, get) => ({
       })
       
       get().subscribeToRoom(room.id)
+      get().startHeartbeat() // ✅ Start heartbeat
       
       return room
     } catch (error) {
@@ -147,7 +205,7 @@ const useGameStore = create((set, get) => ({
   },
 
   joinRoom: async (roomCode) => {
-    console.log('🚪 Joining room:', roomCode)
+    console.log('🚺 Joining room:', roomCode)
     set({ isLoading: true, error: null })
     
     try {
@@ -175,6 +233,7 @@ const useGameStore = create((set, get) => ({
       })
       
       get().subscribeToRoom(room.id)
+      get().startHeartbeat() // ✅ Start heartbeat
       
       return room
     } catch (error) {
@@ -216,23 +275,19 @@ const useGameStore = create((set, get) => ({
       
       const { roomId: currentRoomId, realtimeChannel } = get()
       
-      // 🔧 CRITICAL FIX: Check for missing secret BEFORE early return
       if (!force && currentRoomId === room.id && realtimeChannel) {
         console.log('⏭️ Room already loaded, checking if sync needed...')
         
-        // Even if room is loaded, check if we need game state
         if (room.status === 'PLAYING' && room.current_phase) {
           const { mySecret } = get()
           if (!mySecret) {
             console.log('🔧 Game is PLAYING but no secret! Syncing before return...')
             set({ gamePhase: room.current_phase })
             
-            // Sync phase timer
             if (room.phase_started_at) {
               get().syncPhaseTimer(room.current_phase, room.phase_started_at)
             }
             
-            // Trigger sync asynchronously
             setTimeout(async () => {
               try {
                 await get().syncGameStartWithRetry()
@@ -249,6 +304,23 @@ const useGameStore = create((set, get) => ({
       
       const participants = await gameHelpers.getParticipants(room.id)
       console.log('👥 Participants loaded:', participants.length)
+      
+      // ✅ FIX #2: Validate participants during PLAYING status
+      if (room.status === 'PLAYING' && participants.length === 0) {
+        console.error('🚨 CRITICAL: Game is PLAYING but 0 participants loaded!')
+        console.error('This indicates a broken state. Possible causes:')
+        console.error('  1. Player was removed during React remount (StrictMode bug)')
+        console.error('  2. Database sync issue')
+        console.error('  3. Realtime subscription missed participant updates')
+        
+        set({ 
+          error: 'Game state corrupted: no players found. Please refresh the page.',
+          isLoading: false,
+          pendingRoomLoad: null
+        })
+        
+        throw new Error('CRITICAL: participants.length === 0 during PLAYING status')
+      }
       
       const alreadyJoined = participants.some(p => {
         const normalizedGuestId = guestId.replace('guest_', '')
@@ -278,12 +350,11 @@ const useGameStore = create((set, get) => ({
       })
       
       get().subscribeToRoom(room.id)
+      get().startHeartbeat() // ✅ Start heartbeat
       
-      // Sync phase timer if game is already playing
       if (room.status === 'PLAYING' && room.current_phase && room.phase_started_at) {
         get().syncPhaseTimer(room.current_phase, room.phase_started_at)
         
-        // Check if we need game state
         const { mySecret } = get()
         if (!mySecret) {
           console.log('🔧 Game is PLAYING but no secret found, syncing now...')
@@ -322,6 +393,8 @@ const useGameStore = create((set, get) => ({
         clearInterval(phaseInterval)
       }
       
+      get().stopHeartbeat() // ✅ Stop heartbeat
+      
       const { myUserId: guestId, myUsername: guestUsername } = get()
       set({
         room: null,
@@ -347,6 +420,7 @@ const useGameStore = create((set, get) => ({
         gameResults: null,
         pendingRoomLoad: null,
         syncRetryCount: 0,
+        lastSyncAttempt: 0,
         myUserId: guestId,
         myUsername: guestUsername,
         guestUsername: localStorage.getItem('username') || ''
@@ -380,10 +454,8 @@ const useGameStore = create((set, get) => ({
       await gameHelpers.assignRoles(roomId, participants, room.difficulty, room.word_pack, traitorCount)
       console.log('✅ Roles assigned and written to DB')
       
-      // Wait a moment for DB to propagate
       await new Promise(resolve => setTimeout(resolve, 500))
       
-      // Load my secret with retry
       const { myUserId } = get()
       const mySecret = await get().getMySecretWithRetry(roomId, myUserId)
       console.log('📝 My role:', mySecret.role, '| Word:', mySecret.secret_word)
@@ -458,7 +530,6 @@ const useGameStore = create((set, get) => ({
         timeLeft -= 1
         set({ phaseTimer: timeLeft })
         
-        // 🆕 ADDED: Check if phase can advance early
         if (get().canAdvancePhaseEarly()) {
           clearInterval(interval)
           console.log(`⚡ ${phaseName} complete early! All players submitted.`)
@@ -509,7 +580,6 @@ const useGameStore = create((set, get) => ({
     return DEFAULT_PHASE_DURATIONS[phaseName] || 30
   },
 
-  // 🆕 ADDED: Check if phase can advance early
   canAdvancePhaseEarly: () => {
     const { gamePhase, hints, votes, participants } = get()
     const alivePlayers = participants.filter(p => p.is_alive)
@@ -550,7 +620,6 @@ const useGameStore = create((set, get) => ({
       timeLeft -= 1
       set({ phaseTimer: timeLeft })
       
-      // 🆕 ADDED: Check if phase can advance early
       if (get().canAdvancePhaseEarly()) {
         clearInterval(interval)
         console.log(`⚡ ${phaseName} complete early! All players submitted.`)
@@ -625,24 +694,71 @@ const useGameStore = create((set, get) => ({
   // TURN-BASED HINTS (SERVER-AUTHORITATIVE)
   // ==========================================
   
-  // 🔧 FIX: Calculate current turn from hints count (server data)
   getCurrentTurnPlayer: () => {
     const { turnOrder, hints, participants } = get()
-    if (!turnOrder || turnOrder.length === 0) return null
     
-    // Calculate turn based on how many hints have been submitted
+    // ✅ FIX #3: Auto-sync if turnOrder is empty
+    if (!turnOrder || turnOrder.length === 0) {
+      console.log('🚨 Turn order is empty! Attempting auto-sync...')
+      
+      // Rate-limit sync attempts (max 1 per 5 seconds)
+      const { lastSyncAttempt } = get()
+      const now = Date.now()
+      
+      if (now - lastSyncAttempt > 5000) {
+        set({ lastSyncAttempt: now })
+        console.log('🔄 Triggering syncGameStartWithRetry()...')
+        
+        setTimeout(async () => {
+          try {
+            await get().syncGameStartWithRetry()
+            console.log('✅ Auto-sync completed successfully')
+          } catch (error) {
+            console.error('❌ Auto-sync failed:', error)
+          }
+        }, 100)
+      } else {
+        console.log('⚠️ Auto-sync rate-limited, waiting...')
+      }
+      
+      return null
+    }
+    
     const currentTurnIndex = hints.length % turnOrder.length
     const currentUserId = turnOrder[currentTurnIndex]
     return participants.find(p => p.user_id === currentUserId)
   },
   
-  // 🔧 FIX: Calculate if it's my turn from hints count (server data)
   isMyTurnToHint: () => {
     const { turnOrder, hints, myUserId, gamePhase } = get()
     if (gamePhase !== 'HINT_DROP') return false
-    if (!turnOrder || turnOrder.length === 0) return false
     
-    // Calculate turn based on how many hints have been submitted
+    // ✅ FIX #3: Auto-sync if turnOrder is empty
+    if (!turnOrder || turnOrder.length === 0) {
+      console.log('🚨 Turn order is empty during HINT_DROP! Attempting auto-sync...')
+      
+      const { lastSyncAttempt } = get()
+      const now = Date.now()
+      
+      if (now - lastSyncAttempt > 5000) {
+        set({ lastSyncAttempt: now })
+        console.log('🔄 Triggering syncGameStartWithRetry()...')
+        
+        setTimeout(async () => {
+          try {
+            await get().syncGameStartWithRetry()
+            console.log('✅ Auto-sync completed successfully')
+          } catch (error) {
+            console.error('❌ Auto-sync failed:', error)
+          }
+        }, 100)
+      } else {
+        console.log('⚠️ Auto-sync rate-limited, waiting...')
+      }
+      
+      return false
+    }
+    
     const currentTurnIndex = hints.length % turnOrder.length
     const currentUserId = turnOrder[currentTurnIndex]
     
@@ -651,9 +767,9 @@ const useGameStore = create((set, get) => ({
     return currentUserId === myUserId
   },
   
-  // Keep advanceTurn for display purposes only (no longer used for turn logic)
   advanceTurn: () => {
     const { currentTurnIndex, turnOrder } = get()
+    if (!turnOrder || turnOrder.length === 0) return
     const nextIndex = (currentTurnIndex + 1) % turnOrder.length
     console.log(`🔄 Turn ${currentTurnIndex} -> ${nextIndex} (display only)`)
     set({ currentTurnIndex: nextIndex })
@@ -670,9 +786,6 @@ const useGameStore = create((set, get) => ({
     try {
       await gameHelpers.submitHint(roomId, myUserId, hintText)
       await get().loadHints()
-      
-      // 🔧 FIX: Removed advanceTurn() - turn auto-advances via hints.length calculation!
-      
       console.log('✅ Hint submitted')
     } catch (error) {
       console.error('❌ Error submitting hint:', error)
@@ -688,9 +801,6 @@ const useGameStore = create((set, get) => ({
     try {
       await gameHelpers.submitHint(roomId, myUserId, '[VERBAL]')
       await get().loadHints()
-      
-      // 🔧 FIX: Removed advanceTurn() - turn auto-advances via hints.length calculation!
-      
       console.log('✅ Turn advanced')
     } catch (error) {
       console.error('❌ Error advancing turn:', error)
@@ -787,7 +897,6 @@ const useGameStore = create((set, get) => ({
 
       console.log('📊 Vote counts:', voteCounts)
       
-      // 🔧 FIX: Handle TIE scenario
       if (eliminatedId) {
         const eliminatedPlayer = participants.find(p => p.user_id === eliminatedId)
         console.log('💀 Eliminated:', eliminatedPlayer?.username)
@@ -814,16 +923,16 @@ const useGameStore = create((set, get) => ({
       if (gameEnd.ended) {
         console.log('🏆 Game over! Winner:', gameEnd.winner)
         
-        // 🔧 FIX: Write game end to DB so ALL clients can see it
         await gameHelpers.endGame(roomId, gameEnd.winner, gameEnd.traitorIds)
         console.log('✅ Game end written to database')
         
-        // Host also sets local state
         const finalResults = { ...gameEnd, voteCounts }
         set({ showResults: true, gameResults: finalResults })
         
         const { phaseInterval } = get()
         if (phaseInterval) clearInterval(phaseInterval)
+        
+        get().stopHeartbeat() // ✅ Stop heartbeat when game ends
         return
       }
       
@@ -877,11 +986,9 @@ const useGameStore = create((set, get) => ({
           
           set({ room: updatedRoom })
           
-          // 🔧 FIX: Check if game ended via status change
           if (currentRoom?.status === 'PLAYING' && updatedRoom.status === 'FINISHED') {
             console.log('🏁 Game ended via realtime! Navigating to results...')
             
-            // Load final game state
             ;(async () => {
               try {
                 const votes = await gameHelpers.getVotes(roomId)
@@ -896,6 +1003,7 @@ const useGameStore = create((set, get) => ({
                 }
                 
                 set({ showResults: true, gameResults: finalResults })
+                get().stopHeartbeat() // ✅ Stop heartbeat when game ends
                 console.log('✅ Results loaded for non-host player')
               } catch (error) {
                 console.error('❌ Error loading final results:', error)
@@ -966,6 +1074,12 @@ const useGameStore = create((set, get) => ({
   syncGameStartWithRetry: async () => {
     const { roomId, myUserId, participants } = get()
     console.log('🔄 Syncing game start with retry...')
+    
+    // ✅ FIX #2: Validate participants before sync
+    if (!participants || participants.length === 0) {
+      console.error('🚨 Cannot sync: participants array is empty!')
+      throw new Error('Cannot sync game start: no participants found')
+    }
     
     try {
       const mySecret = await get().getMySecretWithRetry(roomId, myUserId)
