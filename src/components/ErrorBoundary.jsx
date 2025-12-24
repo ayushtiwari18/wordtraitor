@@ -1,13 +1,13 @@
 import React from 'react'
+import { motion } from 'framer-motion'
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props)
     this.state = { 
-      hasError: false, 
-      error: null, 
-      errorInfo: null,
-      errorCount: 0
+      hasError: false,
+      error: null,
+      errorInfo: null
     }
   }
 
@@ -16,117 +16,100 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('🚨 ErrorBoundary caught an error:')
-    console.error('Error:', error)
-    console.error('Error Info:', errorInfo)
-    console.error('Component Stack:', errorInfo.componentStack)
+    console.error('🚨 ErrorBoundary caught error:', error)
+    console.error('Component stack:', errorInfo.componentStack)
     
-    this.setState(prevState => ({
-      error,
-      errorInfo,
-      errorCount: prevState.errorCount + 1
-    }))
-
-    // Optional: Send to error tracking service
-    // Example: Sentry.captureException(error, { contexts: { react: errorInfo } })
-  }
-
-  handleReset = () => {
-    this.setState({ 
-      hasError: false, 
-      error: null, 
-      errorInfo: null 
+    this.setState({
+      error: error,
+      errorInfo: errorInfo
     })
     
-    // Try to recover by reloading the page
-    window.location.reload()
+    // TODO: Send to error tracking service (Sentry, etc.)
+    // logErrorToService(error, errorInfo)
   }
 
-  handleGoHome = () => {
-    this.setState({ 
-      hasError: false, 
-      error: null, 
-      errorInfo: null 
-    })
+  handleReload = () => {
+    // Try to preserve username
+    const username = localStorage.getItem('username')
+    
+    // Clear potentially corrupted state
+    sessionStorage.clear()
+    
+    // Restore username
+    if (username) {
+      localStorage.setItem('username', username)
+    }
+    
+    // Reload page
     window.location.href = '/'
+  }
+
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null, errorInfo: null })
   }
 
   render() {
     if (this.state.hasError) {
-      // Too many errors in quick succession - prevent infinite loop
-      if (this.state.errorCount > 3) {
-        return (
-          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-red-900 to-gray-900">
-            <div className="max-w-md mx-auto px-6 py-8 bg-gray-800 border-2 border-red-500 rounded-2xl text-center">
-              <div className="text-6xl mb-4">💥</div>
-              <h1 className="text-2xl font-bold text-white mb-4">
-                Critical Error
-              </h1>
-              <p className="text-gray-400 mb-6">
-                The app encountered multiple errors. Please refresh the page or go home.
-              </p>
-              <div className="flex gap-4 justify-center">
-                <button
-                  onClick={() => window.location.href = '/'}
-                  className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold text-white transition-colors"
-                >
-                  🏠 Go Home
-                </button>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold text-white transition-colors"
-                >
-                  🔄 Refresh Page
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      }
-
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-red-900 to-gray-900">
-          <div className="max-w-md mx-auto px-6 py-8 bg-gray-800 border-2 border-red-500 rounded-2xl text-center">
-            <div className="text-6xl mb-4">⚠️</div>
-            <h1 className="text-2xl font-bold text-white mb-4">
-              Something went wrong
-            </h1>
-            <p className="text-gray-400 mb-4">
-              The game encountered an unexpected error. Your progress may have been saved.
-            </p>
-            
-            {/* Show error details in development */}
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-gray-800 border-2 border-red-500 rounded-2xl p-8 max-w-2xl w-full"
+          >
+            {/* Error Icon */}
+            <div className="text-center mb-6">
+              <div className="text-6xl mb-4">💥</div>
+              <h1 className="text-3xl font-bold text-white mb-2">
+                Oops! Something went wrong
+              </h1>
+              <p className="text-gray-400">
+                Don't worry - your game progress might still be saved
+              </p>
+            </div>
+
+            {/* Error Details (Development Mode) */}
             {import.meta.env.DEV && this.state.error && (
-              <details className="mt-4 p-4 bg-gray-900 rounded-lg text-left">
-                <summary className="text-red-400 font-semibold cursor-pointer mb-2">
-                  Error Details (Dev Mode)
-                </summary>
-                <pre className="text-xs text-gray-400 overflow-auto max-h-40">
+              <div className="mb-6 p-4 bg-gray-900 rounded-lg border border-gray-700 overflow-auto max-h-64">
+                <p className="text-red-400 font-mono text-sm mb-2">
                   {this.state.error.toString()}
-                  {this.state.errorInfo?.componentStack}
-                </pre>
-              </details>
+                </p>
+                {this.state.errorInfo && (
+                  <details className="text-gray-400 text-xs font-mono mt-2">
+                    <summary className="cursor-pointer hover:text-white">
+                      Component Stack
+                    </summary>
+                    <pre className="mt-2 whitespace-pre-wrap">
+                      {this.state.errorInfo.componentStack}
+                    </pre>
+                  </details>
+                )}
+              </div>
             )}
 
-            <div className="flex gap-4 justify-center mt-6">
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4">
               <button
-                onClick={this.handleReset}
-                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold text-white transition-colors"
+                onClick={this.handleRetry}
+                className="flex-1 py-3 px-6 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors"
               >
                 🔄 Try Again
               </button>
               <button
-                onClick={this.handleGoHome}
-                className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold text-white transition-colors"
+                onClick={this.handleReload}
+                className="flex-1 py-3 px-6 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition-colors"
               >
-                🏠 Go Home
+                🏠 Reload Game
               </button>
             </div>
 
-            <p className="text-gray-500 text-sm mt-6">
-              If this keeps happening, please refresh the page or contact support.
-            </p>
-          </div>
+            {/* Help Text */}
+            <div className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500 rounded-lg">
+              <p className="text-yellow-400 text-sm text-center">
+                💡 If the error persists, try refreshing the page or rejoining the room
+              </p>
+            </div>
+          </motion.div>
         </div>
       )
     }
