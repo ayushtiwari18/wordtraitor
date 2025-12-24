@@ -735,25 +735,22 @@ const useGameStore = create((set, get) => ({
     
     // ✅ FIX #3: Auto-sync if turnOrder is empty
     if (!turnOrder || turnOrder.length === 0) {
-      console.log('🚨 Turn order is empty during HINT_DROP! Attempting auto-sync...')
+      // 🔧 CYCLE 1 FIX: Removed console.log spam - was logging 50+ times/sec
       
       const { lastSyncAttempt } = get()
       const now = Date.now()
       
       if (now - lastSyncAttempt > 5000) {
         set({ lastSyncAttempt: now })
-        console.log('🔄 Triggering syncGameStartWithRetry()...')
+        console.log('🔄 Turn order empty, triggering sync...')
         
         setTimeout(async () => {
           try {
             await get().syncGameStartWithRetry()
-            console.log('✅ Auto-sync completed successfully')
           } catch (error) {
             console.error('❌ Auto-sync failed:', error)
           }
         }, 100)
-      } else {
-        console.log('⚠️ Auto-sync rate-limited, waiting...')
       }
       
       return false
@@ -762,7 +759,11 @@ const useGameStore = create((set, get) => ({
     const currentTurnIndex = hints.length % turnOrder.length
     const currentUserId = turnOrder[currentTurnIndex]
     
-    console.log(`🔄 Turn calculation: ${hints.length} hints submitted → Turn ${currentTurnIndex} (${currentUserId === myUserId ? 'MY TURN' : 'waiting'})`)
+    // 🔧 CYCLE 1 FIX: Removed excessive console.log - only log on turn changes
+    const { currentTurnIndex: prevTurnIndex } = get()
+    if (currentTurnIndex !== prevTurnIndex) {
+      console.log(`🔄 Turn ${currentTurnIndex}: ${currentUserId === myUserId ? 'MY TURN' : 'waiting'}`)
+    }
     
     return currentUserId === myUserId
   },
@@ -1035,7 +1036,27 @@ const useGameStore = create((set, get) => ({
       },
       
       onParticipantUpdate: async (payload) => {
-        console.log('👥 Participants updated')
+        // 🔧 CYCLE 1 FIX: Filter out heartbeat-only updates to reduce UI spam
+        if (payload.eventType === 'UPDATE') {
+          // Check if only last_seen changed (heartbeat update)
+          const oldData = payload.old || {}
+          const newData = payload.new || {}
+          
+          const meaningfulFieldsChanged = 
+            oldData.is_alive !== newData.is_alive ||
+            oldData.username !== newData.username ||
+            oldData.user_id !== newData.user_id
+          
+          if (!meaningfulFieldsChanged) {
+            // Skip UI update for heartbeat-only changes
+            return
+          }
+          
+          console.log('👥 Participants updated (meaningful change)')
+        } else {
+          console.log('👥 Participants updated (INSERT/DELETE)')
+        }
+        
         const roomId = get().roomId
         if (!roomId) return
         const participants = await gameHelpers.getParticipants(roomId)
