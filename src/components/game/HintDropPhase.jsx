@@ -33,6 +33,26 @@ const HintDropPhase = () => {
     loadHints()
   }, [])
 
+  // 🔧 CYCLE 1 FIX: Check turnOrder in useEffect (not during render)
+  useEffect(() => {
+    const { turnOrder, gamePhase, syncGameStartWithRetry } = useGameStore.getState()
+    
+    // Only sync if we're in HINT_DROP and turnOrder is empty
+    if (gamePhase === 'HINT_DROP' && (!turnOrder || turnOrder.length === 0)) {
+      console.log('⚠️ Turn order empty in HINT_DROP, auto-syncing...')
+      
+      // Use setTimeout to avoid updating during render
+      setTimeout(async () => {
+        try {
+          await syncGameStartWithRetry()
+          console.log('✅ Turn order sync completed')
+        } catch (error) {
+          console.error('❌ Turn order sync failed:', error)
+        }
+      }, 100)
+    }
+  }, []) // Run once on mount
+
   useEffect(() => {
     // Check if I've already submitted
     const myHint = hints.find(h => h.user_id === myUserId)
@@ -209,7 +229,7 @@ const HintDropPhase = () => {
         >
           <p className="text-sm text-gray-400 mb-1">Current Turn</p>
           <p className="text-xl font-bold text-white">
-            {isMyTurn ? '👉 YOUR TURN!' : `⏳ ${currentPlayer.username || 'Player'}\'s turn`}
+            {isMyTurn ? '👉 YOUR TURN!' : `⏳ ${currentPlayer.username || 'Player'}\' turn`}
           </p>
         </motion.div>
       )}
