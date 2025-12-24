@@ -163,7 +163,7 @@ const Home = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center px-4">
       <div className="max-w-4xl w-full">
-        {/* Hero Section */}
+        {/* Hero Section - ENHANCED MICROCOPY */}
         <motion.div
           initial={{ opacity: 0, y: -50 }}
           animate={{ opacity: 1, y: 0 }}
@@ -184,17 +184,25 @@ const Home = () => {
             🕵️
           </motion.div>
           <h1 className="text-6xl font-bold text-white mb-4">
-            Word<span className="text-red-500">Traitor</span>
+            Word<span className="text-red-500 text-glow-purple">Traitor</span>
           </h1>
-          <p className="text-xl text-gray-300 mb-2">
-            Find the traitor before it's too late!
-          </p>
-          <p className="text-gray-400">
-            A social deduction word game for 2-8 players
+          
+          {/* NEW: Pulsing gradient headline */}
+          <motion.p 
+            className="text-2xl text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400 mb-2 font-bold"
+            animate={{ opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            🕵️ Someone knows the word. Someone will betray you.
+          </motion.p>
+          
+          {/* NEW: Secondary tagline */}
+          <p className="text-gray-400 text-lg">
+            Trust no one. Guess the word. Expose the traitor.
           </p>
         </motion.div>
 
-        {/* Username Input */}
+        {/* Username Input - ENHANCED */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -204,24 +212,25 @@ const Home = () => {
           <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-3">
               <User className="w-5 h-5 text-purple-400" />
-              <label className="text-white font-semibold">Your Name</label>
+              <label className="text-white font-semibold">Who are you?</label>
+              <span className="text-gray-500 text-sm">(They'll remember...)</span>
             </div>
             <input
               type="text"
               value={localUsername}
               onChange={(e) => handleUsernameChange(e.target.value)}
-              placeholder="Enter your username..."
+              placeholder="Choose wisely. This name stays. 👀"
               maxLength={20}
               className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors"
               data-testid="username-input"
             />
             <p className="text-gray-500 text-xs mt-2">
-              This name will be shown to other players (2-20 characters)
+              2-20 characters. Make it memorable.
             </p>
           </div>
         </motion.div>
 
-        {/* Main Actions */}
+        {/* Main Actions - ENHANCED BUTTON COPY */}
         <div className="grid md:grid-cols-2 gap-6 mb-12">
           <motion.button
             data-testid="create-room-button"
@@ -230,12 +239,13 @@ const Home = () => {
             transition={{ delay: 0.2 }}
             onClick={() => setShowCreateModal(true)}
             disabled={!localUsername.trim()}
-            className="group relative bg-gradient-to-br from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl disabled:hover:scale-100"
+            className="group relative bg-gradient-to-br from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl disabled:hover:scale-100 glow-purple-sm"
           >
             <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
             <Sparkles className="w-12 h-12 mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-white mb-2">Create Room</h3>
-            <p className="text-purple-100">Start a new game with friends</p>
+            {/* NEW COPY */}
+            <h3 className="text-2xl font-bold text-white mb-2">Create Chaos</h3>
+            <p className="text-purple-100">Start the mind game with friends</p>
           </motion.button>
 
           <motion.button
@@ -245,12 +255,13 @@ const Home = () => {
             transition={{ delay: 0.3 }}
             onClick={() => setShowJoinModal(true)}
             disabled={!localUsername.trim()}
-            className="group relative bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl disabled:hover:scale-100"
+            className="group relative bg-gradient-to-br from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-2xl p-8 transition-all duration-300 hover:scale-105 hover:shadow-2xl disabled:hover:scale-100 glow-cyan-sm"
           >
             <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
             <Users className="w-12 h-12 mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-white mb-2">Join Room</h3>
-            <p className="text-blue-100">Enter a room code to join</p>
+            {/* NEW COPY */}
+            <h3 className="text-2xl font-bold text-white mb-2">Join the Suspicion</h3>
+            <p className="text-blue-100">Enter code. Trust nobody.</p>
           </motion.button>
         </div>
 
