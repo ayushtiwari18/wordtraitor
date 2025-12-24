@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
+import ConnectionIndicator from '../../components/ConnectionIndicator'
 import WhisperPhase from '../../components/game/WhisperPhase'
 import HintDropPhase from '../../components/game/HintDropPhase'
 import DebatePhase from '../../components/game/DebatePhase'
@@ -11,6 +12,7 @@ import RevealPhase from '../../components/game/RevealPhase'
 const Game = () => {
   const { roomId } = useParams()
   const navigate = useNavigate()
+  const isNavigatingRef = useRef(false)
   
   const { 
     room, 
@@ -23,7 +25,9 @@ const Game = () => {
     showResults,
     myUserId,
     getAliveParticipants,
-    leaveRoom
+    leaveRoom,
+    isConnected,
+    subscriptionState
   } = useGameStore()
 
   useEffect(() => {
@@ -39,20 +43,35 @@ const Game = () => {
       navigate('/')
     })
 
-    // 🆕 ADDED: Cleanup on browser close/refresh
-    const handleBeforeUnload = (e) => {
-      console.log('👋 Browser closing, cleaning up player...')
-      // Call leaveRoom synchronously (best effort)
-      leaveRoom()
+    // ✅ FIX #1: Use pagehide instead of beforeunload (more reliable)
+    // Only cleanup on ACTUAL browser close, not navigation or HMR
+    const handlePageHide = (e) => {
+      // Check if this is a real page unload, not just navigation
+      if (!isNavigatingRef.current && !e.persisted) {
+        console.log('👋 Browser/tab closing, cleaning up player...')
+        // Use sendBeacon for async cleanup (works even after page unload starts)
+        const cleanup = async () => {
+          try {
+            await leaveRoom()
+          } catch (error) {
+            console.error('⚠️ Cleanup failed:', error)
+          }
+        }
+        cleanup()
+      }
     }
 
-    window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('pagehide', handlePageHide)
 
     return () => {
       console.log('👋 Game component unmounting')
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      // Also clean up on normal navigation away
-      leaveRoom()
+      window.removeEventListener('pagehide', handlePageHide)
+      // ❌ CRITICAL FIX: DO NOT call leaveRoom() here!
+      // React StrictMode double-mounts components, causing premature player removal
+      // Player cleanup handled by:
+      // 1. Manual "Leave" button click
+      // 2. Actual browser close (pagehide event)
+      // 3. Heartbeat timeout (implemented in gameStore)
     }
   }, []) // no roomId in deps
 
@@ -87,13 +106,15 @@ const Game = () => {
   useEffect(() => {
     if (showResults) {
       console.log('🏆 Game ended, navigating to results')
+      isNavigatingRef.current = true // Mark as navigation, not browser close
       navigate(`/results/${roomId}`)
     }
   }, [showResults, roomId])
 
   const handleLeave = async () => {
     if (confirm('Are you sure you want to leave the game?')) {
-      console.log('🚪 Manually leaving game')
+      console.log('🚺 Manually leaving game')
+      isNavigatingRef.current = true // Mark as navigation
       await leaveRoom()
       navigate('/')
     }
@@ -116,7 +137,7 @@ const Game = () => {
         return (
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center">
-              <div className="text-6xl mb-4 animate-pulse">⏳</div>
+              <div className="text-6xl mb-4 animate-pulse">⌛</div>
               <p className="text-xl text-gray-400">Waiting for game to start...</p>
             </div>
           </div>
@@ -169,6 +190,13 @@ const Game = () => {
                 </p>
               </div>
             )}
+            {/* ✅ NEW: Connection Status Indicator */}
+            <ConnectionIndicator 
+              isConnected={isConnected} 
+              subscriptionState={subscriptionState}
+              showLabel={false}
+              className="ml-2"
+            />
           </div>
 
           {/* Center: Players Alive */}
@@ -185,7 +213,7 @@ const Game = () => {
             data-testid="leave-game-button"
             className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500 rounded-lg text-red-400 font-semibold transition-colors"
           >
-            🚪 Leave
+            🚺 Leave
           </button>
         </div>
       </div>
@@ -212,6 +240,13 @@ const Game = () => {
           <span className="text-white font-semibold">
             {alivePlayers.length}/{participants.length} alive
           </span>
+          {/* Connection indicator for mobile */}
+          <ConnectionIndicator 
+            isConnected={isConnected} 
+            subscriptionState={subscriptionState}
+            showLabel={false}
+            className="ml-2"
+          />
         </div>
       </div>
     </div>
