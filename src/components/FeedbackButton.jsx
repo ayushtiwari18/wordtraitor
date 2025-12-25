@@ -1,35 +1,50 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, X, Send } from 'lucide-react'
+import { MessageSquare, X, Send, Loader2 } from 'lucide-react'
+import { feedbackHelpers } from '../lib/supabase'
 
 const FeedbackButton = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     
-    // Create Google Form submission
-    // Replace with your actual Google Form URL and field IDs
-    const formUrl = 'https://docs.google.com/forms/d/e/YOUR_FORM_ID/formResponse'
-    const feedbackFieldId = 'entry.YOUR_FEEDBACK_FIELD_ID'
-    const emailFieldId = 'entry.YOUR_EMAIL_FIELD_ID'
+    if (feedback.trim().length < 10) {
+      setError('Feedback must be at least 10 characters')
+      return
+    }
+
+    setIsSubmitting(true)
+    setError('')
     
-    // For now, just show success (you'll need to configure Google Form)
-    console.log('Feedback submitted:', { feedback, email })
-    
-    // Open form in new tab (temporary solution)
-    // window.open('https://forms.gle/YOUR_FORM_LINK', '_blank')
-    
-    setSubmitted(true)
-    setTimeout(() => {
-      setIsOpen(false)
-      setSubmitted(false)
-      setFeedback('')
-      setEmail('')
-    }, 2000)
+    try {
+      await feedbackHelpers.submitFeedback(
+        feedback,
+        email || null
+      )
+      
+      console.log('✅ Feedback submitted successfully!')
+      setSubmitted(true)
+      
+      // Reset form after 2 seconds
+      setTimeout(() => {
+        setIsOpen(false)
+        setSubmitted(false)
+        setFeedback('')
+        setEmail('')
+        setIsSubmitting(false)
+      }, 2000)
+      
+    } catch (err) {
+      console.error('❌ Feedback submission error:', err)
+      setError(err.message || 'Failed to submit feedback. Please try again.')
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -92,7 +107,7 @@ const FeedbackButton = () => {
                   >
                     <div className="text-6xl mb-4">✅</div>
                     <p className="text-white font-bold text-xl mb-2">Thank you!</p>
-                    <p className="text-gray-400">Your feedback helps us improve</p>
+                    <p className="text-gray-400">Your feedback has been saved</p>
                   </motion.div>
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-4">
@@ -102,12 +117,27 @@ const FeedbackButton = () => {
                       </label>
                       <textarea
                         value={feedback}
-                        onChange={(e) => setFeedback(e.target.value)}
+                        onChange={(e) => {
+                          setFeedback(e.target.value)
+                          setError('')
+                        }}
                         placeholder="Tell us what you think...\n\n• Bug reports\n• Feature requests\n• General feedback"
                         required
+                        minLength={10}
+                        maxLength={5000}
                         rows={5}
                         className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500 resize-none"
+                        disabled={isSubmitting}
                       />
+                      <div className="flex justify-between items-center mt-1">
+                        <p className="text-gray-500 text-xs">Min 10 characters</p>
+                        <p className={`text-xs ${
+                          feedback.length < 10 ? 'text-red-400' :
+                          feedback.length > 4500 ? 'text-yellow-400' : 'text-gray-500'
+                        }`}>
+                          {feedback.length}/5000
+                        </p>
+                      </div>
                     </div>
 
                     <div>
@@ -120,17 +150,33 @@ const FeedbackButton = () => {
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="your@email.com"
                         className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
+                        disabled={isSubmitting}
                       />
                       <p className="text-gray-500 text-xs mt-1">We'll only use this to follow up if needed</p>
                     </div>
 
+                    {error && (
+                      <div className="p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400 text-sm">
+                        {error}
+                      </div>
+                    )}
+
                     <button
                       type="submit"
-                      disabled={!feedback.trim()}
+                      disabled={!feedback.trim() || feedback.length < 10 || isSubmitting}
                       className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-all flex items-center justify-center gap-2"
                     >
-                      <Send size={18} />
-                      Send Feedback
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 size={18} className="animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send size={18} />
+                          Send Feedback
+                        </>
+                      )}
                     </button>
                   </form>
                 )}
@@ -139,7 +185,7 @@ const FeedbackButton = () => {
               {/* Footer */}
               <div className="bg-gray-800 px-6 py-3 border-t border-gray-700">
                 <p className="text-gray-400 text-xs text-center">
-                  💡 Your feedback is anonymous unless you provide your email
+                  💡 Your feedback is saved to our database{email ? '' : ' anonymously'}
                 </p>
               </div>
             </div>

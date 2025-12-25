@@ -83,6 +83,61 @@ function generateRoomCode() {
   return code
 }
 
+// ✨ NEW: Feedback helpers
+export const feedbackHelpers = {
+  submitFeedback: async (feedbackText, email = null) => {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    if (!feedbackText || feedbackText.trim().length < 10) {
+      throw new Error('Feedback must be at least 10 characters')
+    }
+    
+    if (feedbackText.length > 5000) {
+      throw new Error('Feedback must be less than 5000 characters')
+    }
+    
+    const userAgent = navigator.userAgent || 'Unknown'
+    
+    const { data, error } = await withRetry(
+      () => supabase
+        .from('feedback')
+        .insert({
+          feedback_text: feedbackText.trim(),
+          email: email && email.trim() ? email.trim() : null,
+          user_agent: userAgent
+        })
+        .select()
+        .single(),
+      'Submit feedback',
+      3,
+      1000,
+      10000
+    )
+    
+    if (error) {
+      console.error('❌ Feedback submission error:', error)
+      throw new Error('Failed to submit feedback. Please try again.')
+    }
+    
+    console.log('✅ Feedback submitted:', data.id)
+    return data
+  },
+  
+  // Optional: Get feedback (admin only)
+  getFeedback: async (limit = 50) => {
+    if (!supabase) throw new Error('Supabase not configured')
+    
+    const { data, error } = await supabase
+      .from('feedback')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    
+    if (error) throw error
+    return data
+  }
+}
+
 export const gameHelpers = {
   createRoom: async (guestId, username, gameMode = 'SILENT', difficulty = 'MEDIUM', wordPack = 'GENERAL', customSettings = {}) => {
     if (!supabase) throw new Error('Supabase not configured')
