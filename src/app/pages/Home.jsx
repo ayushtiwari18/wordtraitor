@@ -360,10 +360,39 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="relative z-10 p-6 text-center text-gray-500 text-sm border-t border-gray-800">
-        <p>🎮 Built with deception in mind | © 2024 WordTraitor</p>
-        <p className="mt-1 text-xs">A social deduction game for 4-12 players</p>
+      {/* Footer - ENHANCED with links */}
+      <footer className="relative z-10 p-6 border-t border-gray-800">
+        <div className="max-w-4xl mx-auto">
+          {/* Links */}
+          <div className="flex justify-center gap-6 mb-4">
+            <button
+              onClick={() => navigate('/developers')}
+              className="text-gray-400 hover:text-purple-400 transition-colors text-sm font-medium"
+            >
+              👥 Meet the Team
+            </button>
+            <span className="text-gray-700">|</span>
+            <a
+              href="#"
+              className="text-gray-400 hover:text-purple-400 transition-colors text-sm font-medium"
+            >
+              📜 About
+            </a>
+            <span className="text-gray-700">|</span>
+            <a
+              href="#"
+              className="text-gray-400 hover:text-purple-400 transition-colors text-sm font-medium"
+            >
+              🔒 Privacy
+            </a>
+          </div>
+          
+          {/* Copyright */}
+          <div className="text-center">
+            <p className="text-gray-500 text-sm">🎮 Built with deception in mind | © 2024 WordTraitor</p>
+            <p className="mt-1 text-xs text-gray-600">A social deduction game for 4-12 players</p>
+          </div>
+        </div>
       </footer>
 
       {/* Join Room Modal - Same as before */}
