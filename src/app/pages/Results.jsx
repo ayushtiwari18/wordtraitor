@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
 import { useGameMusic } from '../../hooks/useGameMusic'
 import { supabase } from '../../lib/supabase'
@@ -10,92 +10,159 @@ const Results = () => {
   const { roomId } = useParams()
   const navigate = useNavigate()
   
-  const { gameResults, participants, myUserId, mySecret, leaveRoom } = useGameStore()
+  const { gameResults: storeResults, participants: storeParticipants, myUserId, mySecret, leaveRoom } = useGameStore()
+  const [gameResults, setGameResults] = useState(storeResults)
+  const [participants, setParticipants] = useState(storeParticipants)
   const [traitorDetails, setTraitorDetails] = useState(null)
   const [loading, setLoading] = useState(true)
 
   // 🎵 Play victory/defeat music
   useGameMusic('FINISHED', true)
 
-  // ✅ FIX: Load traitor details with proper dependencies
+  // ✅ Load results from database if not in store
   useEffect(() => {
-    console.log('🔍 Results page mounted')
-    console.log('🎮 Game Results:', gameResults)
-    console.log('👥 Participants:', participants)
-    
-    // Fire confetti
-    setTimeout(() => {
-      confetti({
-        particleCount: 150,
-        spread: 90,
-        origin: { y: 0.6 },
-        colors: ['#9333ea', '#ec4899', '#3b82f6', '#10b981']
-      })
-    }, 500)
-
-    // Load traitor details
-    loadTraitorDetails()
-  }, [gameResults, participants, roomId]) // ✅ FIX: Added dependencies
-
-  // ✨ Proper traitor fetching with fallback
-  const loadTraitorDetails = async () => {
-    try {
-      console.log('🔎 Loading traitor details...')
+    const loadResults = async () => {
+      console.log('🔍 Results page mounted')
+      console.log('🎮 Game Results from store:', storeResults)
+      console.log('👥 Participants from store:', storeParticipants)
       
-      // ✅ FIX: Check if gameResults exists
-      if (!gameResults) {
-        console.error('❌ gameResults is null/undefined')
-        setLoading(false)
-        return
-      }
-      
-      // Handle both traitorIds (array) and traitorId (singular)
-      const traitorIds = gameResults?.traitorIds || []
-      const traitorId = traitorIds[0] || gameResults?.traitorId
-      
-      console.log('🔍 traitorIds:', traitorIds)
-      console.log('🔍 traitorId:', traitorId)
-      
-      if (!traitorId) {
-        console.error('❌ No traitor ID in game results', gameResults)
-        setLoading(false)
-        return
-      }
-
-      console.log('🔍 Looking for traitor:', traitorId)
-      console.log('👥 Participants:', participants.map(p => ({ id: p.user_id, name: p.username })))
-      
-      // First try participants array
-      let traitor = participants.find(p => p.user_id === traitorId)
-      
-      // If not found, fetch from database
-      if (!traitor) {
-        console.log('⚠️ Traitor not in participants array, fetching from database...')
-        
-        const { data, error } = await supabase
-          .from('room_participants')
-          .select('user_id, username, is_alive, role')
-          .eq('user_id', traitorId)
-          .eq('room_id', roomId)
-          .single()
-        
-        if (error) {
-          console.error('❌ Error fetching traitor from DB:', error)
-        } else if (data) {
-          traitor = data
-          console.log('✅ Fetched traitor from database:', traitor)
+      try {
+        // ✅ If gameResults not in store, fetch from database
+        if (!storeResults || !storeResults.winner) {
+          console.log('⚠️ gameResults not in store, fetching from database...')
+          
+          // Fetch room to get winner and traitor info
+          const { data: room, error: roomError } = await supabase
+            .from('rooms')
+            .select('*')
+            .eq('id', roomId)
+            .single()
+          
+          if (roomError) {
+            console.error('❌ Error fetching room:', roomError)
+            setLoading(false)
+            return
+          }
+          
+          console.log('✅ Room fetched:', room)
+          
+          if (room.status !== 'FINISHED') {
+            console.error('❌ Room status is not FINISHED:', room.status)
+            setLoading(false)
+            return
+          }
+          
+          // Fetch participants
+          const { data: participantsData, error: participantsError } = await supabase
+            .from('room_participants')
+            .select('*')
+            .eq('room_id', roomId)
+          
+          if (participantsError) {
+            console.error('❌ Error fetching participants:', participantsError)
+          } else {
+            console.log('✅ Participants fetched:', participantsData)
+            setParticipants(participantsData)
+          }
+          
+          // Get traitor IDs (from traitor_ids JSON or fetch from participants)
+          let traitorIds = []
+          if (room.traitor_ids && Array.isArray(room.traitor_ids)) {
+            traitorIds = room.traitor_ids
+          } else {
+            // Fallback: find traitors from participants
+            const traitors = participantsData?.filter(p => p.role === 'TRAITOR') || []
+            traitorIds = traitors.map(t => t.user_id)
+          }
+          
+          console.log('✅ Traitor IDs:', traitorIds)
+          
+          const results = {
+            ended: true,
+            winner: room.winner,
+            traitorIds: traitorIds,
+            traitorId: traitorIds[0],  // For backwards compatibility
+            voteCounts: {}  // We don't have vote counts here, but not critical
+          }
+          
+          setGameResults(results)
+          console.log('✅ Game results constructed from database:', results)
+        } else {
+          setGameResults(storeResults)
+          setParticipants(storeParticipants)
         }
-      } else {
-        console.log('✅ Found traitor in participants:', traitor)
+        
+        // Fire confetti
+        setTimeout(() => {
+          confetti({
+            particleCount: 150,
+            spread: 90,
+            origin: { y: 0.6 },
+            colors: ['#9333ea', '#ec4899', '#3b82f6', '#10b981']
+          })
+        }, 500)
+        
+      } catch (error) {
+        console.error('❌ Error loading results:', error)
       }
-      
-      setTraitorDetails(traitor)
-      setLoading(false)
-    } catch (error) {
-      console.error('❌ Error loading traitor details:', error)
-      setLoading(false)
     }
-  }
+    
+    loadResults()
+  }, [roomId, storeResults, storeParticipants])
+
+  // Load traitor details
+  useEffect(() => {
+    if (!gameResults || !gameResults.traitorIds || participants.length === 0) {
+      return
+    }
+    
+    const loadTraitorDetails = async () => {
+      try {
+        const traitorIds = gameResults.traitorIds || []
+        const traitorId = traitorIds[0] || gameResults.traitorId
+        
+        if (!traitorId) {
+          console.error('❌ No traitor ID in game results')
+          setLoading(false)
+          return
+        }
+
+        console.log('🔍 Looking for traitor:', traitorId)
+        
+        // First try participants array
+        let traitor = participants.find(p => p.user_id === traitorId)
+        
+        // If not found, fetch from database
+        if (!traitor) {
+          console.log('⚠️ Traitor not in participants array, fetching from database...')
+          
+          const { data, error } = await supabase
+            .from('room_participants')
+            .select('user_id, username, is_alive, role')
+            .eq('user_id', traitorId)
+            .eq('room_id', roomId)
+            .single()
+          
+          if (error) {
+            console.error('❌ Error fetching traitor from DB:', error)
+          } else if (data) {
+            traitor = data
+            console.log('✅ Fetched traitor from database:', traitor)
+          }
+        } else {
+          console.log('✅ Found traitor in participants:', traitor)
+        }
+        
+        setTraitorDetails(traitor)
+        setLoading(false)
+      } catch (error) {
+        console.error('❌ Error loading traitor details:', error)
+        setLoading(false)
+      }
+    }
+    
+    loadTraitorDetails()
+  }, [gameResults, participants, roomId])
 
   const handleNewGame = async () => {
     await leaveRoom()
@@ -107,30 +174,30 @@ const Results = () => {
     navigate('/')
   }
 
-  // ✅ FIX: Show loading if gameResults is not ready
-  if (loading || !gameResults) {
+  // Show loading if gameResults is not ready
+  if (loading || !gameResults || !gameResults.winner) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
         <div className="text-center">
           <div className="text-2xl text-purple-400 animate-pulse mb-4">Loading results...</div>
           {!gameResults && (
-            <p className="text-gray-500 text-sm">Waiting for game data...</p>
+            <p className="text-gray-500 text-sm">Fetching game data from server...</p>
           )}
         </div>
       </div>
     )
   }
 
-  const winner = gameResults?.winner
-  const traitorIds = gameResults?.traitorIds || []
-  const traitorId = traitorIds[0] || gameResults?.traitorId
+  const winner = gameResults.winner
+  const traitorIds = gameResults.traitorIds || []
+  const traitorId = traitorIds[0] || gameResults.traitorId
   const wasITraitor = myUserId === traitorId
   const didIWin = (winner === 'TRAITOR' && wasITraitor) || (winner === 'CITIZENS' && !wasITraitor)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 py-12 px-4">
       <div className="max-w-4xl mx-auto">
-        {/* Winner Announcement - ENHANCED */}
+        {/* Winner Announcement */}
         <motion.div
           initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -178,7 +245,7 @@ const Results = () => {
           </motion.div>
         </motion.div>
 
-        {/* Traitor Reveal - ENHANCED */}
+        {/* Traitor Reveal */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -307,7 +374,7 @@ const Results = () => {
           </div>
         </motion.div>
 
-        {/* Action Buttons - ENHANCED */}
+        {/* Action Buttons */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
