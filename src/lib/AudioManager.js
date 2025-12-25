@@ -7,9 +7,7 @@ class AudioManager {
   constructor() {
     this.currentTrack = null
     this.currentPhase = null
-    this.isEnabled = false
     this.volume = 0.6 // Default 60%
-    this.isMuted = false
     this.isInitialized = false
     
     // Audio element pool
@@ -45,7 +43,7 @@ class AudioManager {
       'FINISHED': 'RESULTS'
     }
     
-    // Load preferences from localStorage
+    // Load preferences from localStorage (defaults to ON for new users)
     this.loadPreferences()
     
     // Preload audio elements
@@ -75,18 +73,34 @@ class AudioManager {
   
   /**
    * Load user preferences from localStorage
+   * 🎵 NEW: Defaults to music ON for first-time users
    */
   loadPreferences() {
     try {
       const prefs = localStorage.getItem('wordtraitor_music_prefs')
+      
       if (prefs) {
+        // Returning user - load their saved preferences
         const parsed = JSON.parse(prefs)
-        this.isEnabled = parsed.enabled !== false // Default true
+        this.isEnabled = parsed.enabled ?? true  // Default true if not set
         this.volume = parsed.volume ?? 0.6
         this.isMuted = parsed.muted ?? false
+        console.log('🎵 Loaded user music preferences:', { enabled: this.isEnabled, muted: this.isMuted })
+      } else {
+        // New user - default to music ON
+        this.isEnabled = true
+        this.isMuted = false
+        this.volume = 0.6
+        console.log('🎵 New user detected - music enabled by default')
+        
+        // Save initial preference
+        this.savePreferences()
       }
     } catch (err) {
       console.warn('Failed to load music preferences:', err)
+      // On error, default to ON
+      this.isEnabled = true
+      this.isMuted = false
     }
   }
   
@@ -101,6 +115,7 @@ class AudioManager {
         muted: this.isMuted
       }
       localStorage.setItem('wordtraitor_music_prefs', JSON.stringify(prefs))
+      console.log('💾 Music preferences saved:', prefs)
     } catch (err) {
       console.warn('Failed to save music preferences:', err)
     }
@@ -129,10 +144,23 @@ class AudioManager {
    * Change game phase and switch music accordingly
    */
   setPhase(phase) {
-    if (!this.isEnabled || this.isMuted) return
+    this.currentPhase = phase
+    
+    if (!this.isEnabled || this.isMuted) {
+      console.log(`🎵 Phase set to ${phase}, but music is ${!this.isEnabled ? 'disabled' : 'muted'}`)
+      return
+    }
     
     const trackKey = this.phaseMapping[phase]
-    if (!trackKey || trackKey === this.currentTrack) return
+    if (!trackKey) {
+      console.warn(`🎵 No track mapping for phase: ${phase}`)
+      return
+    }
+    
+    if (trackKey === this.currentTrack) {
+      console.log(`🎵 Already playing ${trackKey} for phase ${phase}`)
+      return
+    }
     
     console.log(`🎵 Phase changed to ${phase}, switching to ${trackKey}`)
     this.playTrack(trackKey)
