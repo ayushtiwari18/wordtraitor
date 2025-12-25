@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
+import { useGameMusic } from '../../hooks/useGameMusic'
 import { supabase } from '../../lib/supabase'
 import confetti from 'canvas-confetti'
 
@@ -12,6 +13,9 @@ const Results = () => {
   const { gameResults, participants, myUserId, mySecret, leaveRoom } = useGameStore()
   const [traitorDetails, setTraitorDetails] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  // 🎵 Play victory/defeat music
+  useGameMusic('FINISHED', true)
 
   // ✅ FIX: Load traitor details with proper dependencies
   useEffect(() => {
