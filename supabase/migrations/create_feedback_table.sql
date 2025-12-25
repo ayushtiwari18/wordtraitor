@@ -17,20 +17,31 @@ CREATE INDEX IF NOT EXISTS feedback_created_at_idx ON public.feedback(created_at
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
 
--- Policy: Anyone can insert feedback (anonymous submissions allowed)
-CREATE POLICY "Anyone can submit feedback" 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Anyone can submit feedback" ON public.feedback;
+DROP POLICY IF EXISTS "Authenticated users can read feedback" ON public.feedback;
+
+-- Policy: Allow EVERYONE (including anonymous) to insert feedback
+CREATE POLICY "Allow anonymous feedback submission" 
 ON public.feedback 
 FOR INSERT 
-TO anon, authenticated
 WITH CHECK (true);
 
--- Policy: Only admins can read feedback (optional - adjust based on your needs)
--- For now, we'll allow reading for authenticated users only
+-- Policy: Only authenticated users can read feedback (optional - for admin access)
 CREATE POLICY "Authenticated users can read feedback" 
 ON public.feedback 
 FOR SELECT 
 TO authenticated
 USING (true);
+
+-- Grant permissions to anon and authenticated roles
+GRANT INSERT ON public.feedback TO anon;
+GRANT INSERT ON public.feedback TO authenticated;
+GRANT SELECT ON public.feedback TO authenticated;
+
+-- Grant usage on the default sequence for UUID generation
+GRANT USAGE ON SCHEMA public TO anon;
+GRANT USAGE ON SCHEMA public TO authenticated;
 
 -- Add comment for documentation
 COMMENT ON TABLE public.feedback IS 'Stores user feedback and bug reports from the WordTraitor application';
