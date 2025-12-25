@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
+import { useGameMusic } from '../../hooks/useGameMusic'
 import ConnectionIndicator from '../../components/ConnectionIndicator'
 import WhisperPhase from '../../components/game/WhisperPhase'
 import HintDropPhase from '../../components/game/HintDropPhase'
@@ -29,6 +30,9 @@ const Game = () => {
     isConnected,
     subscriptionState
   } = useGameStore()
+
+  // 🎵 Enable music for current game phase
+  useGameMusic(gamePhase, true)
 
   useEffect(() => {
     if (!roomId) {
