@@ -10,6 +10,7 @@ import Developers from './pages/Developers'
 import About from './pages/About'
 import Privacy from './pages/Privacy'
 import FeedbackButton from '../components/FeedbackButton'
+import MusicToggle from '../components/MusicToggle'
 import useGameStore from '../store/gameStore'
 
 function App() {
@@ -44,6 +45,9 @@ function App() {
           
           {/* Floating Feedback Button - Available on all pages */}
           <FeedbackButton />
+          
+          {/* Floating Music Toggle - Available on all pages */}
+          <MusicToggle />
         </Router>
       </div>
     </ErrorBoundary>
