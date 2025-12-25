@@ -11,9 +11,10 @@ const MusicToggle = () => {
   const [isEnabled, setIsEnabled] = useState(audioManager.isEnabled)
   const [isMuted, setIsMuted] = useState(audioManager.isMuted)
   const [showTooltip, setShowTooltip] = useState(false)
+  const [isInitializing, setIsInitializing] = useState(false)
   
   useEffect(() => {
-    // Update local state when preferences change
+    // Update local state every second
     const interval = setInterval(() => {
       const state = audioManager.getState()
       setIsEnabled(state.isEnabled)
@@ -23,15 +24,42 @@ const MusicToggle = () => {
     return () => clearInterval(interval)
   }, [])
   
-  const handleToggle = () => {
-    if (!isEnabled) {
-      // If disabled, enable it
-      audioManager.enable()
-      setIsEnabled(true)
-    } else {
-      // If enabled, toggle mute
-      const newMuted = audioManager.toggleMute()
-      setIsMuted(newMuted)
+  const handleToggle = async () => {
+    if (isInitializing) return
+    
+    try {
+      setIsInitializing(true)
+      
+      // First, ensure audio is initialized
+      if (!audioManager.isInitialized) {
+        console.log('🎵 Initializing audio on user click...')
+        await audioManager.initialize()
+      }
+      
+      // If disabled, enable and unmute
+      if (!isEnabled || isMuted) {
+        console.log('🎵 Enabling music...')
+        audioManager.enable()
+        audioManager.isMuted = false
+        audioManager.savePreferences()
+        
+        // Force play current phase music
+        const currentPhase = audioManager.currentPhase || 'LOBBY'
+        audioManager.setPhase(currentPhase)
+        
+        setIsEnabled(true)
+        setIsMuted(false)
+      } else {
+        // If enabled and playing, mute it
+        console.log('🎵 Muting music...')
+        audioManager.toggleMute()
+        setIsMuted(true)
+      }
+      
+    } catch (err) {
+      console.error('🎵 Toggle error:', err)
+    } finally {
+      setIsInitializing(false)
     }
   }
   
@@ -43,9 +71,19 @@ const MusicToggle = () => {
   }
   
   const getTooltip = () => {
-    if (!isEnabled) return 'Music is disabled (click to enable)'
-    if (isMuted) return 'Music is muted (click to unmute)'
-    return 'Music is playing (click to mute)'
+    if (!isEnabled) return '🎵 Click to enable music'
+    if (isMuted) return '🎵 Click to unmute'
+    return '🔇 Click to mute'
+  }
+  
+  const getButtonColor = () => {
+    if (isInitializing) {
+      return 'bg-yellow-600 hover:bg-yellow-700'
+    }
+    if (!isEnabled || isMuted) {
+      return 'bg-gray-700 hover:bg-gray-600'
+    }
+    return 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
   }
   
   return (
@@ -57,21 +95,19 @@ const MusicToggle = () => {
         onClick={handleToggle}
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
+        disabled={isInitializing}
         className={`
           w-12 h-12 rounded-full
           flex items-center justify-center
           transition-all duration-300
           shadow-lg hover:shadow-xl
-          ${
-            !isEnabled || isMuted
-              ? 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-              : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700'
-          }
+          disabled:opacity-50 disabled:cursor-wait
+          ${getButtonColor()}
         `}
       >
         <motion.div
           animate={{
-            scale: isEnabled && !isMuted ? [1, 1.1, 1] : 1
+            scale: isEnabled && !isMuted && !isInitializing ? [1, 1.1, 1] : 1
           }}
           transition={{
             duration: 2,
@@ -79,18 +115,22 @@ const MusicToggle = () => {
             repeatDelay: 1
           }}
         >
-          {getIcon()}
+          {isInitializing ? (
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            getIcon()
+          )}
         </motion.div>
       </motion.button>
       
       {/* Tooltip */}
       <AnimatePresence>
-        {showTooltip && (
+        {showTooltip && !isInitializing && (
           <motion.div
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -10 }}
-            className="absolute left-16 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap pointer-events-none border border-gray-700"
+            className="absolute left-16 top-1/2 -translate-y-1/2 bg-gray-800 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap pointer-events-none border border-gray-700 shadow-xl"
           >
             {getTooltip()}
             <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-4 border-t-transparent border-b-4 border-b-transparent border-r-4 border-r-gray-800" />
