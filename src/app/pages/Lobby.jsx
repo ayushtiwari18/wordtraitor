@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import useGameStore from '../../store/gameStore'
+import { useGameMusic } from '../../hooks/useGameMusic'
 import ConnectionIndicator from '../../components/ConnectionIndicator'
 import PlayerJoinToast from '../../components/PlayerJoinToast'
 import { gameHelpers } from '../../lib/supabase'
@@ -29,6 +30,9 @@ const Lobby = () => {
     customTimings,
     traitorCount
   } = useGameStore()
+
+  // 🎵 Enable lobby music
+  useGameMusic('LOBBY', true)
 
   const [copied, setCopied] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
