@@ -6,7 +6,8 @@ import { useGameMusic } from '../../hooks/useGameMusic'
 import ConnectionIndicator from '../../components/ConnectionIndicator'
 import WhisperPhase from '../../components/game/WhisperPhase'
 import HintDropPhase from '../../components/game/HintDropPhase'
-import DebateVotingPhase from '../../components/game/DebateVotingPhase'
+import DebatePhase from '../../components/game/DebatePhase' // ✅ NEW: Separate phase
+import VerdictPhase from '../../components/game/VerdictPhase' // ✅ NEW: Separate phase
 import RevealPhase from '../../components/game/RevealPhase'
 import PostRoundPhase from '../../components/game/PostRoundPhase'
 
@@ -94,16 +95,6 @@ const Game = () => {
     }
   }, [room?.status, gamePhase, mySecret, participants.length])
 
-  // ❌ REMOVED: Old redirect to Results page
-  // NEW: POST_ROUND phase is shown inside Game.jsx
-  // useEffect(() => {
-  //   if (showResults) {
-  //     console.log('🏆 Game ended, navigating to results')
-  //     isNavigatingRef.current = true
-  //     navigate(`/results/${roomId}`)
-  //   }
-  // }, [showResults, roomId])
-
   const handleLeave = async () => {
     if (confirm('Are you sure you want to leave the game?')) {
       console.log('🚺 Manually leaving game')
@@ -113,18 +104,20 @@ const Game = () => {
     }
   }
 
-  // ✅ UPDATED: Render phases including POST_ROUND (game end)
+  // ✅ FIXED: Render separate DEBATE and VERDICT phases
   const renderPhase = () => {
     switch (gamePhase) {
       case 'WHISPER':
         return <WhisperPhase />
       case 'HINT_DROP':
         return <HintDropPhase />
-      case 'DEBATE_VOTING':
-        return <DebateVotingPhase />
+      case 'DEBATE': // ✅ NEW: Separate debate phase
+        return <DebatePhase />
+      case 'VERDICT': // ✅ NEW: Separate verdict/voting phase
+        return <VerdictPhase />
       case 'REVEAL':
         return <RevealPhase />
-      case 'POST_ROUND': // ✅ NEW: Game end screen (replaces Results page)
+      case 'POST_ROUND':
         return <PostRoundPhase />
       default:
         return (
