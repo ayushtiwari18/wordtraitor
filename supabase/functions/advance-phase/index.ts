@@ -5,7 +5,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { 
   supabase, 
   checkWinCondition, 
-  cleanupRoundData 
+  cleanupGameData  // ✅ NEW: Full game cleanup only
 } from '../_shared/helpers.ts';
 
 interface AdvancePhaseRequest {
@@ -43,6 +43,8 @@ serve(async (req) => {
     const currentPhase = room!.current_phase;
     const currentRound = room!.current_round;
 
+    console.log(`⏩ Advancing from ${currentPhase} (Round ${currentRound})`);
+
     // 2. Phase-specific advancement logic
     switch (currentPhase) {
       case 'WHISPER': {
@@ -53,6 +55,8 @@ serve(async (req) => {
           .eq('id', room_id);
 
         if (updateError) throw updateError;
+
+        console.log('✅ Advanced: WHISPER → HINT_DROP');
 
         return new Response(
           JSON.stringify({
@@ -93,6 +97,8 @@ serve(async (req) => {
 
           if (updateError) throw updateError;
 
+          console.log('✅ Advanced: HINT_DROP → DEBATE_VOTING (all hints submitted)');
+
           return new Response(
             JSON.stringify({
               success: true,
@@ -107,6 +113,8 @@ serve(async (req) => {
             }
           );
         }
+
+        console.log(`⏳ Waiting: ${hints!.length}/${participants!.length} hints submitted`);
 
         return new Response(
           JSON.stringify({
@@ -146,17 +154,23 @@ serve(async (req) => {
         const winResult = await checkWinCondition(room_id);
 
         if (winResult.game_over) {
-          // Game ends
+          // ✅ Game ends → Cleanup ALL data
+          console.log(`🏆 Game Over! Winner: ${winResult.winner}`);
+          await cleanupGameData(room_id);
+
           const { error: updateError } = await supabase
             .from('game_rooms')
             .update({
               status: 'FINISHED',
               finished_at: new Date().toISOString(),
-              current_phase: 'POST_ROUND'
+              current_phase: 'POST_ROUND',
+              winner: winResult.winner  // Store winner
             })
             .eq('id', room_id);
 
           if (updateError) throw updateError;
+
+          console.log('✅ Advanced: REVEAL → POST_ROUND (game over)');
 
           return new Response(
             JSON.stringify({
@@ -174,19 +188,23 @@ serve(async (req) => {
           );
         }
 
-        // Game continues - cleanup and start next round
-        await cleanupRoundData(room_id, currentRound);
-
+        // ✅ Game continues — NO CLEANUP, just advance to next round
         const nextRound = currentRound + 1;
+        
+        console.log(`🔄 Round ${currentRound} → Round ${nextRound} (traitor survived)`);
+        console.log('⚠️ NO CLEANUP - Keeping all hints, votes, messages for next round');
+
         const { error: updateError } = await supabase
           .from('game_rooms')
           .update({
-            current_phase: 'HINT_DROP', // Skip WHISPER on Round 2+
+            current_phase: 'HINT_DROP', // Skip WHISPER
             current_round: nextRound
           })
           .eq('id', room_id);
 
         if (updateError) throw updateError;
+
+        console.log(`✅ Advanced: REVEAL → HINT_DROP (Round ${nextRound}, same words)`);
 
         return new Response(
           JSON.stringify({
@@ -209,7 +227,7 @@ serve(async (req) => {
         throw new Error(`Unknown phase: ${currentPhase}`);
     }
   } catch (error) {
-    console.error('advance-phase error:', error);
+    console.error('❌ advance-phase error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       {
