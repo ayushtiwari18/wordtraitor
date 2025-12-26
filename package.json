@@ -13,13 +13,15 @@
     "test:scaled": "cypress run --spec 'cypress/e2e/07-game-mechanics-scaled.cy.js'"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.38.4",
+    "canvas-confetti": "^1.9.4",
+    "framer-motion": "^10.16.16",
+    "lucide-react": "^0.303.0",
+    "prop-types": "^15.8.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0",
-    "@supabase/supabase-js": "2.38.4",
-    "zustand": "^4.4.7",
-    "framer-motion": "^10.16.16",
-    "lucide-react": "^0.303.0"
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",
