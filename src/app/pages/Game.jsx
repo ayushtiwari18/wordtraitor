@@ -6,9 +6,9 @@ import { useGameMusic } from '../../hooks/useGameMusic'
 import ConnectionIndicator from '../../components/ConnectionIndicator'
 import WhisperPhase from '../../components/game/WhisperPhase'
 import HintDropPhase from '../../components/game/HintDropPhase'
-import DebatePhase from '../../components/game/DebatePhase'
-import VerdictPhase from '../../components/game/VerdictPhase'
+import DebateVotingPhase from '../../components/game/DebateVotingPhase' // ✅ UPDATED: Combined component
 import RevealPhase from '../../components/game/RevealPhase'
+import PostRoundPhase from '../../components/game/PostRoundPhase' // ✅ NEW: End game phase
 
 const Game = () => {
   const { roomId } = useParams()
@@ -124,19 +124,19 @@ const Game = () => {
     }
   }
 
-  // Render current phase component
+  // ✅ UPDATED: Render current phase component with backend-matching phase names
   const renderPhase = () => {
     switch (gamePhase) {
       case 'WHISPER':
         return <WhisperPhase />
       case 'HINT_DROP':
         return <HintDropPhase />
-      case 'DEBATE':
-        return <DebatePhase />
-      case 'VERDICT':
-        return <VerdictPhase />
+      case 'DEBATE_VOTING': // ✅ CHANGED: Backend uses DEBATE_VOTING, not DEBATE
+        return <DebateVotingPhase />
       case 'REVEAL':
         return <RevealPhase />
+      case 'POST_ROUND': // ✅ NEW: Game completion phase
+        return <PostRoundPhase />
       default:
         return (
           <div className="flex items-center justify-center min-h-[60vh]">
