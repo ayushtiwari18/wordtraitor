@@ -54,7 +54,26 @@ export async function checkWinCondition(roomId: string): Promise<{
 }
 
 /**
- * Process voting end: calculate elimination and advance to REVEAL
+ * Get traitor user_id for a room
+ */
+async function getTraitorId(roomId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('round_secrets')
+    .select('user_id')
+    .eq('room_id', roomId)
+    .eq('role', 'TRAITOR')
+    .single();
+
+  if (error) {
+    console.error('Error fetching traitor:', error);
+    return null;
+  }
+
+  return data?.user_id || null;
+}
+
+/**
+ * ✅ NEW: Process voting end with NEVER ELIMINATE TRAITOR in ties
  */
 export async function processVotingEnd(roomId: string) {
   const { data: room, error: roomError } = await supabase
@@ -86,15 +105,50 @@ export async function processVotingEnd(roomId: string) {
     id => voteCounts[id] === maxVotes
   );
 
-  // 3. Handle tie: random selection
-  const eliminatedId = topCandidates[
-    Math.floor(Math.random() * topCandidates.length)
-  ];
+  // 3. ✅ NEW: Handle tie — NEVER eliminate traitor
+  const traitorId = await getTraitorId(roomId);
+  
+  let eliminatedId: string;
+
+  if (topCandidates.length === 1) {
+    // No tie - eliminate the single top candidate
+    eliminatedId = topCandidates[0];
+  } else {
+    // Tie detected — filter out traitor from candidates
+    const nonTraitorCandidates = topCandidates.filter(id => id !== traitorId);
+
+    if (nonTraitorCandidates.length > 0) {
+      // Random selection from non-traitor tied candidates
+      eliminatedId = nonTraitorCandidates[
+        Math.floor(Math.random() * nonTraitorCandidates.length)
+      ];
+      console.log(`🎲 Tie-breaking: Selected ${eliminatedId} from ${nonTraitorCandidates.length} non-traitor candidates`);
+    } else {
+      // All tied votes are on traitor — pick random alive non-traitor instead
+      const { data: alivePlayers } = await supabase
+        .from('room_participants')
+        .select('user_id')
+        .eq('room_id', roomId)
+        .eq('is_alive', true);
+
+      const nonTraitorAlive = alivePlayers!.filter(p => p.user_id !== traitorId);
+      
+      if (nonTraitorAlive.length > 0) {
+        eliminatedId = nonTraitorAlive[
+          Math.floor(Math.random() * nonTraitorAlive.length)
+        ].user_id;
+        console.log(`🎲 All votes on traitor - randomly eliminating non-traitor: ${eliminatedId}`);
+      } else {
+        // Should never happen (traitor is last player)
+        throw new Error('Cannot eliminate: only traitor remains');
+      }
+    }
+  }
 
   // 4. Check if eliminated was traitor
   const { data: secret, error: secretError } = await supabase
     .from('round_secrets')
-    .select('role')
+    .select('role, secret_word')
     .eq('room_id', roomId)
     .eq('user_id', eliminatedId)
     .single();
@@ -103,7 +157,7 @@ export async function processVotingEnd(roomId: string) {
 
   const wasTraitor = secret!.role === 'TRAITOR';
 
-  // 5. Mark as eliminated
+  // 5. Mark as eliminated (becomes spectator)
   const { error: updateError } = await supabase
     .from('room_participants')
     .update({ is_alive: false })
@@ -111,6 +165,8 @@ export async function processVotingEnd(roomId: string) {
     .eq('user_id', eliminatedId);
 
   if (updateError) throw updateError;
+
+  console.log(`✅ Eliminated ${eliminatedId} - Was traitor: ${wasTraitor}`);
 
   // 6. Advance to REVEAL
   const { error: phaseError } = await supabase
@@ -124,33 +180,63 @@ export async function processVotingEnd(roomId: string) {
     next_phase: 'REVEAL',
     eliminated_id: eliminatedId,
     was_traitor: wasTraitor,
+    eliminated_word: secret!.secret_word,
     vote_counts: voteCounts
   };
 }
 
 /**
- * Clean up round data (hints and votes) but preserve round_secrets
+ * ✅ NEW: Cleanup ALL game data when game ends (POST_ROUND)
+ * Called ONLY when game is over, not after each round
  */
-export async function cleanupRoundData(roomId: string, roundNumber: number) {
-  // Delete hints for this round
+export async function cleanupGameData(roomId: string) {
+  console.log(`🧹 Cleaning up all game data for room: ${roomId}`);
+
+  // Delete ALL hints (all rounds)
   const { error: hintsError } = await supabase
     .from('game_hints')
     .delete()
-    .eq('room_id', roomId)
-    .eq('round_number', roundNumber);
+    .eq('room_id', roomId);
 
-  if (hintsError) throw hintsError;
+  if (hintsError) {
+    console.error('Error deleting hints:', hintsError);
+    throw hintsError;
+  }
 
-  // Delete votes for this round
+  // Delete ALL votes (all rounds)
   const { error: votesError } = await supabase
     .from('game_votes')
     .delete()
-    .eq('room_id', roomId)
-    .eq('round_number', roundNumber);
+    .eq('room_id', roomId);
 
-  if (votesError) throw votesError;
+  if (votesError) {
+    console.error('Error deleting votes:', votesError);
+    throw votesError;
+  }
 
-  // DO NOT DELETE round_secrets (persist entire game)
+  // Delete ALL chat messages
+  const { error: messagesError } = await supabase
+    .from('room_messages')
+    .delete()
+    .eq('room_id', roomId);
+
+  if (messagesError) {
+    console.error('Error deleting messages:', messagesError);
+    throw messagesError;
+  }
+
+  // Delete round secrets
+  const { error: secretsError } = await supabase
+    .from('round_secrets')
+    .delete()
+    .eq('room_id', roomId);
+
+  if (secretsError) {
+    console.error('Error deleting secrets:', secretsError);
+    throw secretsError;
+  }
+
+  console.log('✅ Game data cleanup complete');
 }
 
 /**
