@@ -21,7 +21,7 @@ const RevealPhase = () => {
     
     const timer1 = setTimeout(() => setRevealStep(1), 1000) // "Counting votes..." -> "The accused is..."
     const timer2 = setTimeout(() => setRevealStep(2), 2500) // Show name
-    const timer3 = setTimeout(() => setRevealStep(3), 4000) // Show role/word
+    const timer3 = setTimeout(() => setRevealStep(3), 4000) // Show role/word (only if traitor)
     const timer4 = setTimeout(() => setRevealStep(4), 5500) // Show all votes
     
     return () => {
@@ -63,6 +63,7 @@ const RevealPhase = () => {
   const eliminatedPlayer = participants.find(p => p.user_id === voteResults?.eliminatedId)
   const voteCounts = voteResults?.voteCounts || {}
   const sortedVotes = Object.entries(voteCounts).sort((a, b) => b[1] - a[1])
+  const wasTraitor = eliminated?.role === 'TRAITOR'
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -124,7 +125,7 @@ const RevealPhase = () => {
           </h3>
           <p className="text-xl text-red-400 font-semibold">has been eliminated!</p>
           
-          {/* STEP 3: Show role and secret word */}
+          {/* STEP 3: Show role and secret word - ✅ ONLY IF TRAITOR */}
           <AnimatePresence>
             {revealStep >= 3 && (
               <motion.div
@@ -133,45 +134,58 @@ const RevealPhase = () => {
                 transition={{ delay: 0.3 }}
                 className="mt-6 pt-6 border-t border-gray-700"
               >
-                {/* Role Badge */}
-                <div className={`inline-block px-6 py-2 rounded-full font-bold text-lg mb-4 ${
-                  eliminated?.role === 'TRAITOR'
-                    ? 'bg-red-500/20 text-red-400 border-2 border-red-500'
-                    : 'bg-blue-500/20 text-blue-400 border-2 border-blue-500'
-                }`}>
-                  {eliminated?.role === 'TRAITOR' ? '🕵️ They were the TRAITOR!' : '👤 They were a CITIZEN...'}
-                </div>
-                
-                {/* Secret Word */}
-                <div className="mt-4">
-                  <p className="text-gray-400 text-sm mb-2">Their word was:</p>
-                  <div className="inline-block bg-gray-900 border-2 border-purple-500 rounded-lg px-6 py-3">
-                    <span className="text-3xl font-bold text-purple-400">
-                      {eliminated?.secret_word || 'Unknown'}
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Reaction message */}
-                {eliminated?.role === 'TRAITOR' && (
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5 }}
-                    className="text-green-400 font-bold text-lg mt-4"
-                  >
-                    ✅ Citizens Win! The traitor has been caught!
-                  </motion.p>
-                )}
-                {eliminated?.role === 'CITIZEN' && (
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5 }}
-                    className="text-yellow-400 font-bold text-lg mt-4"
-                  >
-                    ⚠️ Wrong choice! An innocent was eliminated...
-                  </motion.p>
+                {wasTraitor ? (
+                  <>
+                    {/* ✅ TRAITOR CAUGHT - Show everything */}
+                    <div className="inline-block px-6 py-2 rounded-full font-bold text-lg mb-4 bg-red-500/20 text-red-400 border-2 border-red-500">
+                      🕵️ They were the TRAITOR!
+                    </div>
+                    
+                    {/* Show traitor's word */}
+                    <div className="mt-4">
+                      <p className="text-gray-400 text-sm mb-2">Their word was:</p>
+                      <div className="inline-block bg-gray-900 border-2 border-purple-500 rounded-lg px-6 py-3">
+                        <span className="text-3xl font-bold text-purple-400">
+                          {eliminated?.secret_word || 'Unknown'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Victory message */}
+                    <motion.p
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.5 }}
+                      className="text-green-400 font-bold text-lg mt-4"
+                    >
+                      ✅ Citizens Win! The traitor has been caught!
+                    </motion.p>
+                    
+                    {/* Show citizen word for comparison */}
+                    <div className="mt-4">
+                      <p className="text-gray-400 text-sm">Everyone else had:</p>
+                      <div className="inline-block bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 mt-2">
+                        <span className="text-xl text-gray-300">
+                          {/* Get citizen word from any non-traitor */}
+                          {participants.find(p => p.user_id !== eliminatedPlayer.user_id)?.secret_word || 'Unknown'}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* ❌ NOT TRAITOR - Hide word and role */}
+                    <div className="text-6xl mb-4">❌</div>
+                    <p className="text-yellow-400 font-bold text-2xl mb-4">
+                      {eliminatedPlayer.username || 'They'} was NOT the traitor!
+                    </p>
+                    <p className="text-gray-400 text-lg">
+                      ⚠️ The traitor is still among you!
+                    </p>
+                    <p className="text-sm text-gray-500 mt-4">
+                      Round continues with remaining players...
+                    </p>
+                  </>
                 )}
               </motion.div>
             )}
@@ -179,7 +193,7 @@ const RevealPhase = () => {
         </motion.div>
       )}
 
-      {/* No Elimination */}
+      {/* No Elimination (Tie with no elimination logic) */}
       {revealStep >= 2 && !eliminatedPlayer && sortedVotes.length > 0 && (
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
