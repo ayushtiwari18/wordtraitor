@@ -4,7 +4,6 @@ import ErrorBoundary from '../components/ErrorBoundary'
 import Home from './pages/Home'
 import Lobby from './pages/Lobby'
 import Game from './pages/Game'
-import Results from './pages/Results'
 import Settings from './pages/Settings'
 import Developers from './pages/Developers'
 import About from './pages/About'
@@ -36,7 +35,8 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/lobby/:roomCode" element={<Lobby />} />
             <Route path="/game/:roomId" element={<Game />} />
-            <Route path="/results/:roomId" element={<Results />} />
+            {/* ❌ REMOVED: <Route path="/results/:roomId" element={<Results />} /> */}
+            {/* Game results now shown in POST_ROUND phase inside Game.jsx */}
             <Route path="/settings" element={<Settings />} />
             <Route path="/developers" element={<Developers />} />
             <Route path="/about" element={<About />} />
