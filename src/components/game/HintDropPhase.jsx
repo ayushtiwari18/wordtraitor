@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 import useGameStore from '../../store/gameStore'
 import SpinningWheel from '../SpinningWheel'
-import { supabase } from '../../lib/supabaseClient'
+import { supabase } from '../../lib/supabase.js'
 
 const HintDropPhase = () => {
   // 🔧 CYCLE 4 FIX: Granular Zustand selectors (only re-render when specific data changes)

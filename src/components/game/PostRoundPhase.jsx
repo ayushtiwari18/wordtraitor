@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
-import { supabase } from '../../lib/supabaseClient'
+import { supabase } from '../../lib/supabase.js'
 import useGameStore from '../../store/gameStore'
 
 const PostRoundPhase = () => {
