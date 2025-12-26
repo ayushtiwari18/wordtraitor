@@ -6,9 +6,9 @@ import { useGameMusic } from '../../hooks/useGameMusic'
 import ConnectionIndicator from '../../components/ConnectionIndicator'
 import WhisperPhase from '../../components/game/WhisperPhase'
 import HintDropPhase from '../../components/game/HintDropPhase'
-import DebateVotingPhase from '../../components/game/DebateVotingPhase' // ✅ UPDATED: Combined component
+import DebateVotingPhase from '../../components/game/DebateVotingPhase'
 import RevealPhase from '../../components/game/RevealPhase'
-import PostRoundPhase from '../../components/game/PostRoundPhase' // ✅ NEW: End game phase
+import PostRoundPhase from '../../components/game/PostRoundPhase'
 
 const Game = () => {
   const { roomId } = useParams()
@@ -23,7 +23,6 @@ const Game = () => {
     loadRoom,
     isLoading,
     error,
-    showResults,
     myUserId,
     getAliveParticipants,
     leaveRoom,
@@ -47,13 +46,10 @@ const Game = () => {
       navigate('/')
     })
 
-    // ✅ FIX #1: Use pagehide instead of beforeunload (more reliable)
-    // Only cleanup on ACTUAL browser close, not navigation or HMR
+    // ✅ FIX: Use pagehide for cleanup
     const handlePageHide = (e) => {
-      // Check if this is a real page unload, not just navigation
       if (!isNavigatingRef.current && !e.persisted) {
         console.log('👋 Browser/tab closing, cleaning up player...')
-        // Use sendBeacon for async cleanup (works even after page unload starts)
         const cleanup = async () => {
           try {
             await leaveRoom()
@@ -70,18 +66,11 @@ const Game = () => {
     return () => {
       console.log('👋 Game component unmounting')
       window.removeEventListener('pagehide', handlePageHide)
-      // ❌ CRITICAL FIX: DO NOT call leaveRoom() here!
-      // React StrictMode double-mounts components, causing premature player removal
-      // Player cleanup handled by:
-      // 1. Manual "Leave" button click
-      // 2. Actual browser close (pagehide event)
-      // 3. Heartbeat timeout (implemented in gameStore)
     }
-  }, []) // no roomId in deps
+  }, [])
 
   // 🔧 SAFETY NET: Force sync if game is playing but we have no secret
   useEffect(() => {
-    // Check if we're in a broken state
     if (
       room?.status === 'PLAYING' && 
       gamePhase && 
@@ -91,7 +80,6 @@ const Game = () => {
       console.log('🚨 SAFETY NET: Game is PLAYING but no secret! Force syncing...')
       
       const syncWithDelay = async () => {
-        // Wait a bit for loadRoom to finish
         await new Promise(resolve => setTimeout(resolve, 500))
         
         try {
@@ -106,36 +94,37 @@ const Game = () => {
     }
   }, [room?.status, gamePhase, mySecret, participants.length])
 
-  // Redirect to results if game ended
-  useEffect(() => {
-    if (showResults) {
-      console.log('🏆 Game ended, navigating to results')
-      isNavigatingRef.current = true // Mark as navigation, not browser close
-      navigate(`/results/${roomId}`)
-    }
-  }, [showResults, roomId])
+  // ❌ REMOVED: Old redirect to Results page
+  // NEW: POST_ROUND phase is shown inside Game.jsx
+  // useEffect(() => {
+  //   if (showResults) {
+  //     console.log('🏆 Game ended, navigating to results')
+  //     isNavigatingRef.current = true
+  //     navigate(`/results/${roomId}`)
+  //   }
+  // }, [showResults, roomId])
 
   const handleLeave = async () => {
     if (confirm('Are you sure you want to leave the game?')) {
       console.log('🚺 Manually leaving game')
-      isNavigatingRef.current = true // Mark as navigation
+      isNavigatingRef.current = true
       await leaveRoom()
       navigate('/')
     }
   }
 
-  // ✅ UPDATED: Render current phase component with backend-matching phase names
+  // ✅ UPDATED: Render phases including POST_ROUND (game end)
   const renderPhase = () => {
     switch (gamePhase) {
       case 'WHISPER':
         return <WhisperPhase />
       case 'HINT_DROP':
         return <HintDropPhase />
-      case 'DEBATE_VOTING': // ✅ CHANGED: Backend uses DEBATE_VOTING, not DEBATE
+      case 'DEBATE_VOTING':
         return <DebateVotingPhase />
       case 'REVEAL':
         return <RevealPhase />
-      case 'POST_ROUND': // ✅ NEW: Game completion phase
+      case 'POST_ROUND': // ✅ NEW: Game end screen (replaces Results page)
         return <PostRoundPhase />
       default:
         return (
@@ -143,6 +132,7 @@ const Game = () => {
             <div className="text-center">
               <div className="text-6xl mb-4 animate-pulse">⌛</div>
               <p className="text-xl text-gray-400">Waiting for game to start...</p>
+              <p className="text-sm text-gray-500 mt-2">Current phase: {gamePhase || 'None'}</p>
             </div>
           </div>
         )
@@ -178,49 +168,50 @@ const Game = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900" data-testid="game-container">
-      {/* Top Bar */}
-      <div className="bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          {/* Left: Room Info */}
-          <div className="flex items-center gap-4">
-            <div>
-              <p className="text-sm text-gray-400">Room Code</p>
-              <p className="text-xl font-bold text-white" data-testid="game-room-code">{room?.room_code}</p>
-            </div>
-            {gamePhase && (
-              <div className="px-4 py-2 bg-purple-500/20 border border-purple-500 rounded-lg" data-testid="game-phase-indicator">
-                <p className="text-sm text-purple-400 font-semibold uppercase">
-                  {gamePhase.replace('_', ' ')}
-                </p>
+      {/* Top Bar - ✅ Hide on POST_ROUND */}
+      {gamePhase !== 'POST_ROUND' && (
+        <div className="bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+            {/* Left: Room Info */}
+            <div className="flex items-center gap-4">
+              <div>
+                <p className="text-sm text-gray-400">Room Code</p>
+                <p className="text-xl font-bold text-white" data-testid="game-room-code">{room?.room_code}</p>
               </div>
-            )}
-            {/* ✅ NEW: Connection Status Indicator */}
-            <ConnectionIndicator 
-              isConnected={isConnected} 
-              subscriptionState={subscriptionState}
-              showLabel={false}
-              className="ml-2"
-            />
-          </div>
+              {gamePhase && (
+                <div className="px-4 py-2 bg-purple-500/20 border border-purple-500 rounded-lg" data-testid="game-phase-indicator">
+                  <p className="text-sm text-purple-400 font-semibold uppercase">
+                    {gamePhase.replace('_', ' ')}
+                  </p>
+                </div>
+              )}
+              <ConnectionIndicator 
+                isConnected={isConnected} 
+                subscriptionState={subscriptionState}
+                showLabel={false}
+                className="ml-2"
+              />
+            </div>
 
-          {/* Center: Players Alive */}
-          <div className="hidden md:flex items-center gap-2" data-testid="players-alive-counter">
-            <span className="text-gray-400">👥</span>
-            <span className="text-white font-semibold">
-              {alivePlayers.length}/{participants.length} alive
-            </span>
-          </div>
+            {/* Center: Players Alive */}
+            <div className="hidden md:flex items-center gap-2" data-testid="players-alive-counter">
+              <span className="text-gray-400">👥</span>
+              <span className="text-white font-semibold">
+                {alivePlayers.length}/{participants.length} alive
+              </span>
+            </div>
 
-          {/* Right: Leave Button */}
-          <button
-            onClick={handleLeave}
-            data-testid="leave-game-button"
-            className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500 rounded-lg text-red-400 font-semibold transition-colors"
-          >
-            🚺 Leave
-          </button>
+            {/* Right: Leave Button */}
+            <button
+              onClick={handleLeave}
+              data-testid="leave-game-button"
+              className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500 rounded-lg text-red-400 font-semibold transition-colors"
+            >
+              🚺 Leave
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Game Area */}
       <div className="py-8" data-testid="game-phase-content">
@@ -237,22 +228,23 @@ const Game = () => {
         </AnimatePresence>
       </div>
 
-      {/* Players Sidebar - Mobile */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-gray-900/90 backdrop-blur-sm border-t border-gray-800 p-4">
-        <div className="flex items-center justify-center gap-2 text-sm">
-          <span className="text-gray-400">👥 Players:</span>
-          <span className="text-white font-semibold">
-            {alivePlayers.length}/{participants.length} alive
-          </span>
-          {/* Connection indicator for mobile */}
-          <ConnectionIndicator 
-            isConnected={isConnected} 
-            subscriptionState={subscriptionState}
-            showLabel={false}
-            className="ml-2"
-          />
+      {/* Players Sidebar - Mobile - ✅ Hide on POST_ROUND */}
+      {gamePhase !== 'POST_ROUND' && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-gray-900/90 backdrop-blur-sm border-t border-gray-800 p-4">
+          <div className="flex items-center justify-center gap-2 text-sm">
+            <span className="text-gray-400">👥 Players:</span>
+            <span className="text-white font-semibold">
+              {alivePlayers.length}/{participants.length} alive
+            </span>
+            <ConnectionIndicator 
+              isConnected={isConnected} 
+              subscriptionState={subscriptionState}
+              showLabel={false}
+              className="ml-2"
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
