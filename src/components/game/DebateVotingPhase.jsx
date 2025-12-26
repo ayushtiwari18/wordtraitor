@@ -13,7 +13,7 @@ const DebateVotingPhase = () => {
     room,
     getAliveParticipants,
     isHost,
-    forceEndVoting
+    advancePhase  // ✅ Use advancePhase instead of non-existent forceEndVoting
   } = useGameStore()
 
   const [selectedPlayer, setSelectedPlayer] = useState(null)
@@ -22,7 +22,7 @@ const DebateVotingPhase = () => {
 
   const alivePlayers = getAliveParticipants()
   const myPlayer = alivePlayers.find(p => p.user_id === myUserId)
-  const votableP layers = alivePlayers.filter(p => p.user_id !== myUserId)
+  const votablePlayers = alivePlayers.filter(p => p.user_id !== myUserId)  // ✅ FIXED: Was "votableP layers"
   const isSilentMode = room?.game_mode === 'SILENT'
   const isRealMode = room?.game_mode === 'REAL'
 
@@ -63,7 +63,8 @@ const DebateVotingPhase = () => {
     
     if (confirm('End voting now? Not all players have voted yet.')) {
       try {
-        await forceEndVoting()
+        console.log('🚨 Host forcing advance to REVEAL phase')
+        await advancePhase()  // ✅ Use advancePhase method
       } catch (error) {
         console.error('Error forcing end voting:', error)
       }
